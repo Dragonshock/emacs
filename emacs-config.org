@@ -44,23 +44,25 @@ straight 的引导写在 `init-emacs-straight`，它必须早于任何 `:straigh
 
 * Anatomy of this Emacs configuration
 
-你现在读到的是 =emacs-config.org=。这个文件不参与 Emacs 启动——它唯一的用途是 tangle 出真正
-干活的文件。生成的文件按职责分工：
+你现在读到的是 =emacs-config.org=。它不参与 Emacs 启动，唯一的用途是 tangle 出真正干活的文件。
+生成物按职责分成以下几类：
 
-- =early-init.el= :: 启动最早期的准备：GC 策略、静默、帧参数、加载优化。运行在任何包与 frame
+- =early-init.el= :: 启动最早期的准备——GC 策略、静默、帧参数、加载优化。运行在任何包与 frame
   之前，所以只做不依赖包、不依赖窗口尺寸的事。
 
 - =init.el= :: 加载器。把 =core/= 加进 =load-path=，按依赖顺序 =require= 各模块，并挂一个启动
-  耗时日志。它不含任何配置逻辑。
+  耗时日志。它不含配置逻辑；改动它等于改加载顺序。
 
-- =core/= 目录 :: 23 个配置模块。每个模块对应一类关注点，例如 =init-emacs-theme.el= 管主题、
-  =init-emacs-org.el= 管 Org、=init-emacs-ai.el= 管 gptel 与 agent-shell。模块只调整包的行为，
-  不定义新的功能层。
+- =core/= 目录 :: 23 个配置模块，一个模块一类关注点。模块只调整包的行为，不定义新的功能层。
+  模块清单与其分层见后面的 Modules 章。
 
-- =scripts/= 目录 :: 配置的回归测试与辅助脚本。例如 =test-init-load.sh= 在 batch 下验证整份
-  配置能加载到底，并断言主题与几处关键设置。
+- =scripts/= 目录 :: 配置的回归测试与辅助脚本。目前是 =test-init-load.sh=：在 batch 下验证整份
+  配置能加载到底，并断言主题与关键设置。
 
-- =etc/= 目录 :: 留给本地的、不属于任何模块的静态配置（模板等），默认不进版本控制。
+- =etc/= 目录 :: 本地静态配置片段（=eshell/=、=gnus/= 等），由 .gitignore 排除，不属于模块。
+
+- =private.el= :: 身份与账号（邮件地址等），同样被 .gitignore 排除。模块通过 =boundp= 判断它是否
+  存在，不存在时降级而不是报错。
 
 - =var/= 目录 :: Emacs 运行时数据（auto-save、会话、agent-shell 记录），不进版本控制。
 
@@ -68,13 +70,14 @@ straight 的引导写在 `init-emacs-straight`，它必须早于任何 `:straigh
 
 - =emacs-config.org= :: 就是本文件——既是源码也是说明。
 
-下面是目录结构（忽略运行时目录与 =private.el=）：
+目录结构（标 runtime 的目录不进版本控制）：
 
 #+begin_example
 ~/.config/emacs
 ├── early-init.el
 ├── init.el
 ├── emacs-config.org
+├── private.el              (runtime)
 ├── core/
 │   ├── init-emacs-agenda.el
 │   ├── init-emacs-ai.el
@@ -101,21 +104,27 @@ straight 的引导写在 `init-emacs-straight`，它必须早于任何 `:straigh
 │   └── init-emacs-writing.el
 ├── scripts/
 │   └── test-init-load.sh
-├── etc/
-└── var/                 (gitignore)
+├── etc/                    (runtime)
+│   ├── eshell/
+│   └── gnus/
+└── var/                    (runtime)
 #+end_example
 
-为什么拆成这么多模块：单文件 =init.el= 在几百行之后无法回答「主题为什么这么设」。模块化让一次
-改动只落在一个领域里，也方便单独摘出一段分享。代价是文件多；收益是「谁在什么时候加载」始终只有
-一个答案——那个答案在 =init.el= 的 =require= 列表里，而不是散落在各模块内部。
+那次最重要的分层是 =core/= 内部：23 个模块按「关注什么」分成五组（底座、外观、交互、语言与文档、
+外部世界），但分组只影响阅读顺序，不影响加载顺序——加载顺序永远由 =init.el= 的 =require= 列表决定，
+两者逐条一致。需要重排时，先确认自己动到的是不是真正的依赖边（见 The main initialisation 一节）。
 
-改配置的流程只有一条：编辑本文件里的散文或代码块，=C-c C-v C-t=（=M-x org-babel-tangle=）把
-代码块写回 =core/=，然后重启 Emacs。散文不参与 tangle，所以纯文档改动应当满足
-=git diff core/= 为空；反过来说，只想改文档却看到 =core/= 有 diff，说明误动了代码块。
+为什么拆成这么多模块：单文件 =init.el= 在几百行之后无法回答「主题为什么这么设」。模块化让一次改动
+只落在一个领域里，也方便单独摘出一段分享。代价是文件多；收益是「谁在什么时候加载」始终只有一个
+答案。
 
-这份配置放在 =~/.config/emacs=，由 Nix 安装的 Emacs 31.1 读取；=~/.emacs.d= 不存在，所以
-Emacs 直接走 XDG 路径。配置同时支持 daemon 与普通启动：=use-package-always-demand= 在 daemon 下
-为 =t=（所有包立即加载），普通启动下模块延迟加载，由 =once= 在空闲时增量推进。
+改配置的流程只有一条：编辑本文件里的散文或代码块，=C-c C-v C-t=（=M-x org-babel-tangle=）把代码块
+写回 =core/=，然后重启 Emacs。散文不参与 tangle，所以纯文档改动应当满足 =git diff core/= 为空；
+反过来说，只想改文档却看到 =core/= 有 diff，说明误动了代码块。
+
+这份配置放在 =~/.config/emacs=，由 Nix 安装的 Emacs 31.1 读取；=~/.emacs.d= 不存在，所以 Emacs
+直接走 XDG 路径。配置同时支持 daemon 与普通启动：=use-package-always-demand= 在 daemon 下为 =t=
+（所有包立即加载），普通启动下模块延迟加载，由 =once= 在空闲时增量推进。
 
 ** Conventions
 
