@@ -9,6 +9,39 @@
 #
 # 方案见 dev-docs（在 dotfiles 仓库的 emacs/dev-docs，023/024/025）。
 
+* Details of this Emacs build
+
+这套配置运行在 Emacs 31.1（Nix 安装，native compilation 打开），同时用于 macOS 与 Linux。
+没有刻意维护某个 Emacs 版本的下限：配置里用到的都是 31 才有的接口（`split-window-preferred-direction`、
+`use-package` 的内置 autoload、`native-comp` 的相关选项），所以升级 Emacs 时优先检查这些地方，而不是
+去兼容更旧的版本。
+
+** 运行环境
+
+- macOS：`init-emacs-platform` 里的 macOS 分支处理外观轮询与 `s-` 修饰键；`early-init.el` 里对
+  `ns-transparent-titlebar` 的处理也只在 `(featurep 'ns)` 时生效。
+- Linux：`init-emacs-platform` 里走 XDG Settings portal 的 `color-scheme`，`early-init.el` 里
+  清掉 `command-line-ns-option-alist`。
+
+两条路径共享同一套模块，平台差异集中在 `init-emacs-platform` 一个文件里，别的模块不写
+`system-type` 判断。
+
+** 构建特性
+
+straight.el 直接 clone 上游仓库并 byte-compile，没有走 `package.el`，因此 `package-enable-at-startup`
+在 `early-init.el` 里被关掉。`straight-vc-git-default-clone-depth` 设为浅克隆（`(1 single-branch)`），
+首次安装快，代价是某些包的历史不可查。
+
+`early-init.el` 还关掉了几条启动期的杂音：`native-comp-async-report-warnings-errors` 与
+`native-comp-warning-on-missing-source` 只在 `init-file-debug` 时打开，`warning-suppress-types`
+过滤掉 `defvaralias` 与 `lexical-binding` 两类噪音。
+
+** 包管理
+
+所有第三方包由 straight 安装，`use-package` 只做声明。`straight-use-package-by-default` 为 `nil`，
+所以每处 `use-package` 都显式带 `:straight`；这样「这个包从哪来」在阅读时不必猜，代价是多打几个字。
+straight 的引导写在 `init-emacs-straight`，它必须早于任何 `:straight` 声明。
+
 * Anatomy of this Emacs configuration
 
 这一节讲三件事：文件之间的真源关系、启动时的加载顺序、以及改了配置之后怎么落到磁盘上。
@@ -21,9 +54,9 @@ org-babel 从本文件各自的 ~#+begin_src~ 块 tangle 出来，文件头部�
 就是它们的出生证明。因此看到 ~core/init-emacs-xxx.el~ 里有问题时，永远去改本文件里对应的代码块，
 直接编辑生成物会在下次 tangle 时被无声覆盖。
 
-两个例外：~early-init.el~ 与 ~init.el~ 不在 tangle 范围内，它们是手写的骨架文件。
-前者在包系统初始化之前运行（early-init 阶段能改的东西有限，所以它只做最早期的准备），
-后者负责把 ~core/~ 加入 ~load-path~ 并逐个 ~require~。要调整这两个文件，直接改文件本身。
+~early-init.el~ 与 ~init.el~ 同样由本文件 tangle 生成，只是它们各自单独成章
+（见 The early initialisation 与 The main initialisation）：前者在包系统之前运行，
+后者把 ~core/~ 加入 ~load-path~ 并逐个 ~require~。
 
 ** The load order lives in =init.el=
 
@@ -56,6 +89,235 @@ straight 的引导写在 ~init-emacs-straight~，它必须在其它模块使用�
 ~init-~ 前缀只用于模块名。~use-package~ 里的 ~:init~ / ~:config~ / ~:hook~ 等关键字保持常规语义，
 不额外定义缩写。散文用中文，代码注释保持原样（很多是从上游或 DOOM 抄来的英文注释，改动它们
 只会让与上游的对照变难）。
+
+* The early initialisation of Emacs (=early-init.el=)
+
+这是 Emacs 启动时读的第一个文件，运行在任何包与 frame 之前，所以只能做不依赖包、不依赖窗口尺寸的
+准备。它同时是本文件 tangle 出来的（`:tangle early-init.el`），改它要改下面这一节，不要直接改文件。
+
+** 启动期 GC 与静默
+
+启动头几秒把 `gc-cons-threshold` 抬到 `most-positive-fixnum`、`gc-cons-percentage` 抬到 1.0，
+避免在加载模块时反复 GC；`emacs-startup-hook` 里再挂一个 idle 1 秒的定时器，把两者降回
+32 MiB / 0.2。用 idle 定时器而不是直接 `setq`，是为了不让第一次 GC 卡住首帧。
+
+同一段里把 `ad-redefinition-action` 设为 `accept`，并让 native-comp 的告警只在 `init-file-debug`
+时出现——启动期看到的告警应当是真问题，不是这几类预期内的噪音。
+
+** 帧参数与启动画面
+
+`frame-inhibit-implied-resize` 关掉隐式缩放；`inhibit-startup-screen` 一族与两条
+`display-startup-*` 的 `:override` advice 一起，确保没有启动屏、没有 echo area 提示。
+`inhibit-redisplay` 与 `inhibit-message` 在 `window-setup-hook` 之前为 t，之后恢复并
+`redraw-frame`（daemon 下跳过）——这一段专治深色环境下启动时的白闪。
+
+`default-frame-alist` 里把 tab-bar、menu-bar、tool-bar、滚动条全部预先压成 0，配合
+`menu-bar-mode` / `tool-bar-mode` / `scroll-bar-mode` 的 `nil`，避免用户在启动后要关两次。
+tab bar 由 `init-emacs-modeline` 稍后再打开，绕开 PGTK 下 echo area 被裁的问题。
+
+** 文件加载优化
+
+`file-name-handler-alist` 在启动期间被清空、在 `emacs-startup-hook` 里恢复（用
+`command-line-1` 的 `:around` advice 控制时机）——每次 `require` / `load` 都会查这张表，
+清空后启动更快。`load-suffixes` 与 `load-file-rep-suffixes` 也被裁剪，`before-init-hook` 里
+再按平台补回 `.dylib` / `.so` / `.dll`。
+
+`load-prefer-newer` 在 `noninteractive`（batch）时为 t，这样批处理脚本会读到比 `.elc` 更新的源文件。
+`read-process-output-max` 抬到 4 MiB，主要给 LSP 用。
+
+#+begin_src emacs-lisp :tangle early-init.el
+;;; -*- lexical-binding: t -*-
+;;; Mainly for speeding up startup time
+
+;; Defer GC during startup, then restore sane runtime defaults later.
+(setq gc-cons-threshold most-positive-fixnum
+      gc-cons-percentage 1.0)
+;; Restore when idle, so the first GC doesn't delay the first frame.
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (run-with-idle-timer
+             1 nil (lambda ()
+                     (setq gc-cons-threshold (* 32 1024 1024)
+                           gc-cons-percentage 0.2))))
+          100)
+
+;; Keep early startup quiet unless we're debugging init.
+(setq ad-redefinition-action 'accept
+      jka-compr-verbose init-file-debug
+      native-comp-async-report-warnings-errors init-file-debug
+      native-comp-warning-on-missing-source init-file-debug
+      native-comp-async-on-battery-power nil
+      warning-suppress-types '((defvaralias) (lexical-binding))
+      warning-inhibit-types '((files missing-lexbind-cookie)))
+
+;; Larger process output buffer (mainly for LSP).
+(setq read-process-output-max (* 4 1024 1024))
+
+;; Batch jobs should pick up source files newer than their byte-code.
+(setq load-prefer-newer noninteractive)
+
+;; Inhibit resizing frame
+(setq frame-inhibit-implied-resize t)
+
+;; Inhibit startup screen & message
+(setq inhibit-startup-screen t
+      inhibit-startup-echo-area-message t
+      inhibit-startup-buffer-menu t
+      inhibit-x-resources t
+      inhibit-default-init t
+      initial-scratch-message nil
+      initial-major-mode 'fundamental-mode)
+(advice-add #'display-startup-echo-area-message :override #'ignore)
+(advice-add #'display-startup-screen :override #'ignore)
+
+;; Suppress flashing at startup
+(setq-default inhibit-redisplay t
+              inhibit-message t)
+(add-hook 'window-setup-hook
+          (lambda ()
+            (setq-default inhibit-redisplay nil
+                          inhibit-message nil)
+            (unless (daemonp)
+              (redraw-frame))))
+
+;; Inhibit package.el initialization
+(setq package-enable-at-startup nil)
+
+;; Faster to disable these here (before initialized)
+;; init-modeline enables the tab bar later to avoid clipping PGTK's echo area.
+(push '(tab-bar-lines . 0) default-frame-alist)
+(push '(menu-bar-lines . 0) default-frame-alist)
+(push '(tool-bar-lines . 0) default-frame-alist)
+(push '(vertical-scroll-bars) default-frame-alist)
+(push '(internal-border-width . 0) default-frame-alist)
+(when (featurep 'ns)
+  (push '(ns-transparent-titlebar . t) default-frame-alist))
+;; Set these to nil so users don't have to toggle the modes twice to reactivate.
+(setq menu-bar-mode nil
+      tool-bar-mode nil
+      scroll-bar-mode nil
+      tab-bar-mode nil)
+
+;; Avoid toolbar setup work during startup. It is unnecessary while the toolbar is
+;; disabled, and can be reconstructed if `tool-bar-mode' is enabled later.
+(when (fboundp 'tool-bar-setup)
+  (advice-add #'tool-bar-setup :override #'ignore))
+
+;; Case-insensitive pass over `auto-mode-alist' is time wasted.
+(setq auto-mode-case-fold nil)
+
+;; Avoid processing command-line option tables irrelevant to this frame type.
+(unless (eq system-type 'darwin)
+  (setq command-line-ns-option-alist nil))
+(unless (memq initial-window-system '(x pgtk))
+  (setq command-line-x-option-alist nil))
+
+;; `setopt' can load custom dependencies early for type checks. Keep it from
+;; doing so during init; type checks will still happen when variables are defined.
+(when (fboundp 'setopt--set)
+  (define-advice setopt--set (:around (fn &rest args) inhibit-load-symbol -90)
+    (let ((custom-load-recursion t))
+      (apply fn args))))
+
+;; `file-name-handler-alist' is consulted on each call to `require', `load', or various file/io functions
+(unless (or (daemonp) noninteractive init-file-debug)
+  (let ((old-value (default-toplevel-value 'file-name-handler-alist)))
+    (put 'file-name-handler-alist 'initial-value (copy-sequence old-value))
+    (define-advice command-line-1 (:around (fn args-left) restore-file-name-handlers)
+      (let ((file-name-handler-alist
+             (if args-left (copy-sequence old-value) file-name-handler-alist)))
+        (funcall fn args-left)))
+    (add-hook 'emacs-startup-hook
+              (lambda ()
+                "Recover file name handlers."
+                (set-default-toplevel-value
+                 'file-name-handler-alist
+                 (delete-dups
+                  (append (default-toplevel-value 'file-name-handler-alist)
+                          old-value))))
+              101)))
+
+;; optimize `load-suffixes'
+(setq load-suffixes '(".elc" ".el")
+      load-file-rep-suffixes '(""))
+
+(defun +restore-load-suffixes-h ()
+  "Restore dynamic module suffixes before loading the init file."
+  (setq load-suffixes `(".elc" ".el"
+                        ,(cond ((eq system-type 'darwin) ".dylib")
+                               ((eq system-type 'gnu/linux) ".so")
+                               ((eq system-type 'windows-nt) ".dll")
+                               (t nil)))))
+
+(add-hook 'before-init-hook #'+restore-load-suffixes-h 100)
+
+;; Site files will use `load-file', which emit messages and triggers redisplay
+;; Make it silent and undo advice later
+(define-advice load-file (:override (file) silence)
+  (load file nil 'nomessage))
+(define-advice startup--load-user-init-file (:after (&rest _) undo-silence)
+  (advice-remove #'load-file #'load-file@silence))
+#+end_src
+
+* The main initialisation of Emacs (=init.el=)
+
+这是启动时读的第二个文件。它只做三件事：把 `core/` 放进 `load-path`、按依赖顺序 `require`
+各模块、以及挂一个启动耗时日志。它同样由本文件 tangle 生成（`:tangle init.el`）。
+
+** 加载顺序就是依赖顺序
+
+`init.el` 的 `require` 列表与本文件「模块」章节的顺序逐条一致。模块之间几乎不互相 `require`，
+所以顺序只在这一层有意义。真正敏感的几条边：
+
+- `init-emacs-util` 必须最先：`add-hook!` 与 `defadvice!` 是后面所有模块的语法基础。
+- `init-emacs-straight` 必须早于任何 `:straight` 声明，它负责 bootstrap。
+- `init-emacs-theme` 必须早于 `init-emacs-platform`：平台层在加载时就会调用
+  `+system-appearance-changed`，而 `+load-theme` 定义在 theme 层。
+- `init-emacs-edit` 必须早于 `init-emacs-prog`：`C-c r` 前缀键的归属在 edit 里确定，prog 往里补子键。
+
+改标题顺序就是改加载顺序。要重排时先确认自己动到的是不是上面这几条约束边。
+
+#+begin_src emacs-lisp :tangle init.el
+;;; -*- lexical-binding: t -*-
+
+(add-hook 'window-setup-hook
+          (lambda ()
+            (message "window-setup: %.3fs, after-init: %.3fs"
+                     (float-time (time-subtract nil before-init-time))
+                     (float-time (time-subtract after-init-time before-init-time)))))
+
+;; Each entry maps to one `core/init-*.el', tangled from `emacs-config.org'.
+;; The order IS the dependency order:
+;;   init-emacs-util  first: every other module uses its `add-hook!' / `defadvice!'
+;;   init-emacs-theme before init-emacs-platform: the platform files call
+;;              `+system-appearance-changed' at load time.
+
+(add-to-list 'load-path (expand-file-name "core" user-emacs-directory))
+
+(require 'init-emacs-util)
+(require 'init-emacs-straight)
+(require 'init-emacs-core)
+(require 'init-emacs-theme)
+(require 'init-emacs-ui)
+(require 'init-emacs-platform)
+(require 'init-emacs-highlight)
+(require 'init-emacs-modeline)
+(require 'init-emacs-completion)
+(require 'init-emacs-search)
+(require 'init-emacs-edit)
+(require 'init-emacs-window)
+(require 'init-emacs-dired)
+(require 'init-emacs-prog)
+(require 'init-emacs-langs)
+(require 'init-emacs-writing)
+(require 'init-emacs-org)
+(require 'init-emacs-agenda)
+(require 'init-emacs-vcs)
+(require 'init-emacs-tools)
+(require 'init-emacs-mail)
+(require 'init-emacs-web)
+(require 'init-emacs-ai)
+#+end_src
 
 * The modules of this Emacs configuration
 
@@ -9095,3 +9357,75 @@ OpenAI OAuth（~gptel-openai-oauth~），与本章主用的 Magpie 网关是两�
 #+begin_src emacs-lisp :tangle core/init-emacs-ai.el
 (provide 'init-emacs-ai)
 #+end_src
+
+* The custom libraries of this configuration
+
+除了 `core/init-emacs-*.el` 这些配置模块，本配置里还有一层「自己的库」：宏与函数。它们不是
+第三方包，也不打算发布，但被多个模块共用，改动的影响面比单个模块大。
+
+** ~add-hook!~ 与 ~defadvice!~
+
+两个宏定义在 `init-emacs-util`，是全文的基础设施：
+
+- `add-hook!` 一次给多个 hook 装一批函数，支持 `:local`、`:append`、`:depth`、`:remove`、
+  `:call-immediately`、`:unless-daemonp-call-immediately` 等关键字。后者用于「非 daemon 启动时
+  立即执行一次」的场景（例如加载主题），daemon 下则推迟到有 frame 时。
+- `defadvice!` 把 `advice-add` 写成声明式，形式和 `use-package` 的 `:config` 接近，避免在模块里
+  散落 `advice-add` / `advice-remove` 的成对调用。
+
+** 以 ~+~ 为前缀的函数
+
+配置私有的函数一律以 `+` 开头（`+load-theme`、`+elfeed-display-entry`、`+mu4e-apply`、
+`+agent-shell-dot-subdir` 等），与上游包的命名区分。它们分散在各自模块里，不集中到一个文件——
+函数跟着使用它的模块走，读代码时不必在两个文件之间跳。
+
+`init-emacs-util` 里还有几个被多处调用的 helper（`+unfill-region`、
+`+enable-conservative-scrolling`），命名同样是 `+` 前缀。
+
+** 模块内的小宏
+
+有些模块在本地定义小宏（例如 `init-emacs-completion` 里的
+`+corfu-move-to-minibuffer`、`init-emacs-web` 里的 `+elfeed-*`）。原则是：只被一个模块用的，
+就留在那个模块；被两个以上模块用的，才提到 `init-emacs-util`。
+
+* Frequently Asked Questions (FAQ)
+
+** 为什么很多模块，而不是一个 init.el？
+
+一个模块对应一类关注点（主题、补全、Org、邮件……），改一个领域只读一个文件。更重要的是加载顺序：
+顺序依赖集中写在 `init.el` 的 `require` 列表里，而不是散落在各文件内部。代价是文件多，收益是
+「谁在什么时候加载」这件事始终只有一个答案。
+
+** 为什么每个包都显式写 ~:straight~？
+
+`straight-use-package-by-default` 设为 `nil`。如果默认接管，任何一个 `use-package` 都会去装包，
+读代码时无法区分「这个包由 straight 管理」和「这个包是内置的」。显式写出来，代价是多打几个字。
+
+** 加一个新包要改几处？
+
+只有一处：在对应模块里加一个 `use-package`（带 `:straight`），然后 `C-c C-v C-t` 重新 tangle。
+不需要改 `init.el`，也不需要手动装包——straight 在下次启动时按 `:straight` 声明安装。
+
+** 为什么主题在 ~init-emacs-theme~，而不在 ~init-emacs-ui~？
+
+因为平台层（`init-emacs-platform`）在加载时就会触发外观变化回调，它需要一个已经定义好的
+`+load-theme`；而 `init-emacs-theme` 排在平台层之前。把主题相关的东西放进 ui 会让这条依赖边
+反过来。
+
+** 改了配置但没生效怎么办？
+
+先确认改的是 `emacs-config.org`，然后 `C-c C-v C-t` 重新 tangle，再重启 Emacs。只在运行中的
+Emacs 里 `eval-buffer` 往往不够：`custom-set-faces`、`defcustom` 这类「设置」不会因为删掉配置
+而撤销，需要重启或显式重置。
+
+** 为什么文档改动也会让 ~core/~ 出现 diff？
+
+不会。散文不参与 tangle；如果只改散文却看到 `core/` 有 diff，说明误动了 `#+begin_src` 块。
+正常情况应当满足 `git diff core/` 为空。
+
+** 怎么排查启动变慢？
+
+`init.el` 开头挂了一个 `window-setup-hook`，启动后会在 echo area 打印 window-setup 与 after-init
+的耗时。要更细的分解，用 `emacs --init-directory ... -Q --batch` 之外的 `use-package` 计时，
+或临时打开 `init-file-debug` 看 `early-init.el` 里被抑制的那些告警。
+
