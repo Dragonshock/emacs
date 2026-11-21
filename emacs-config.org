@@ -441,7 +441,7 @@ t，之后恢复并 ~redraw-frame~（daemon 下跳过）——这一段专治深
 - ~init-emacs-completion~ —— 补全栈：~vertico~ / ~consult~ / ~embark~ / ~corfu~ 一族。
 - ~init-emacs-search~ —— 搜索与替换的入口（~consult~ 之外的那些）。
 - ~init-emacs-edit~ —— 编辑行为与 ~C-c r~ 前缀键的归属。
-- ~init-emacs-window~ —— 窗口管理与 popper 规则表。
+- ~init-emacs-window~ —— 窗口管理、popper 规则表与 buffer 列表分组（~ibuffer~ 一族）。
 - ~init-emacs-dired~ —— 文件管理。
 
 *** Languages and writing
@@ -5365,9 +5365,9 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
 
 ** The =init-emacs-window.el= module
 
-这个模块管两件事：窗口自己怎么摆（~ace-window~、~winner~、~zoom~），以及谁有资格占用窗口（~popper~）。前者是操作，后者是策略；真正的资产是后者那张规则表，所以 ~popper~ 那一节最长。
+这个模块管三件事：窗口自己怎么摆（~ace-window~、~winner~、~zoom~），谁有资格占用窗口（~popper~），以及 buffer 列表怎么管（~ibuffer~ 一族）。前两件里，前者是操作，后者是策略，真正的资产是 popper 那张规则表，所以 ~popper~ 那一节最长；buffer 列表这一维归到这里走的是 prot 的先例——buffer 管理与窗口管理同节。
 
-下面 6 个块，一节一个话题，顺序与代码顺序一致。第一节的 ~defadvice!~ 在代码里排在所有包之前，所以它不是「关于某个包」的一节，而是一条对 ~toggle-frame-maximized~ 的补丁。
+下面 8 个块，一节一个话题，顺序与代码顺序一致。第一节的 ~defadvice!~ 在代码里排在所有包之前，所以它不是「关于某个包」的一节，而是一条对 ~toggle-frame-maximized~ 的补丁。
 
 *** The =init-emacs-window.el= section for stacked window rotation
 
@@ -5599,6 +5599,130 @@ README 的原话是「enforcing a fixed and automatic balanced layout where the 
   :config
   (setq zoom-minibuffer-preserve-layout nil
         zoom-ignored-major-modes '(ediff-mode vundo-mode minibuffer-mode speedbar-mode)))
+#+end_src
+
+*** The =init-emacs-window.el= section for ~ibuffer~
+
+~C-x C-b~ 在这部配置里弹出的不再是平铺的 ~list-buffers~，而是内置的 ~ibuffer~：能按 filter groups 分组、能按列排版、能成组地批量标记。buffer 列表归到窗口模块，走的是 prot 的先例（他的配置里 buffer 管理就在 window 一节，连独立的 ibuffer 模块都没有）——窗口模块既然回答了「谁有资格占用窗口」，同一份配置顺手回答「buffer 列表怎么管」。
+
+把 point 放在组标题行（比如 ~[Elfeed]~ 那一行）按 ~d~，整组 buffer 会一起标上待删标记，~x~ 之后一次删除。组级删除的机制就在这里：~ibuffer-mark-for-delete~ 的文档字符串写明，
+
+: If point is on a group name, this function operates on that group.
+
+point 在组名上时它对整个组生效，组由下面 ~ibuffer-project~ 动态生成。
+
+快速切换不受影响：~C-x b~ 在 ~init-emacs-completion~ 里仍是 ~consult-buffer~，本节不动它。二者互补——consult 负责「快速跳到某个 buffer」，ibuffer 负责「看清全部、成组地管理」。
+
++ 包名（Emacs 内置）：~ibuffer~
++ Git 仓库：
+  - GitHub：<https://github.com/emacs-mirror/emacs>（源码随 Emacs 自带）
+
+#+begin_src emacs-lisp :tangle core/init-emacs-window.el :mkdirp yes
+(use-package ibuffer
+  :straight (:type built-in)
+  :bind (("C-x C-b" . ibuffer)
+         :map ibuffer-mode-map
+         ("RET" . +ibuffer-visit-buffer))
+  :hook (ibuffer-mode . +ibuffer-mode-setup-h)
+  :init
+  (setq ibuffer-human-readable-size t
+        ibuffer-show-empty-filter-groups nil
+        ibuffer-use-other-window t)
+  :config
+  (defun +ibuffer-mode-setup-h ()
+    "Set up automatic refresh and compact lines in Ibuffer."
+    (ibuffer-auto-mode 1)
+    (setq-local truncate-lines t))
+
+  (defun +ibuffer-visit-buffer ()
+    "Visit the buffer at point, closing a popup Ibuffer window first."
+    (interactive)
+    (if (window-parameter nil 'window-side)
+        (let ((buffer (ibuffer-current-buffer t))
+              (window (selected-window)))
+          (delete-window window)
+          (pop-to-buffer-same-window buffer))
+      (ibuffer-visit-buffer))))
+#+end_src
+
+*** The =init-emacs-window.el= section for ~ibuffer-project~
+
+ibuffer 的分组是静态的话，这一节把它变活：README 把 ~ibuffer-project~ 定位成「set up filter groups based on project roots」，按 ~project.el~（对 vc 目录退回 Git 根）给每个项目生成一个组，buffer 的 project-relative 文件名同时进入排序键（~project-file-relative~）。
+
+三块内容。~+ibuffer-special-filter-groups~ 是特殊组清单，排在项目组前面：Agenda / Telega / Elfeed / Eww / Xwidget / EMMS / Help / Scratch，即使当前未必都开着也原样保留——一行为一组，删了没收益，回归有风险。~+ibuffer-project-filter-groups~ 把特殊组、~ibuffer-project-generate-filter-groups~ 出的项目组、末尾星号命名的临时组拼成完整的 ~ibuffer-filter-groups~。~+ibuffer-project-setup-h~ 挂在 ~ibuffer-hook~ 上重建分组并设排序——hook 在初次刷新之后才跑，所以末尾手动 ~ibuffer-update~ 一次让新分组立即显示出来。
+
++ 包名（MELPA）：~ibuffer-project~
++ Git 仓库：
+  - GitHub：<https://github.com/muffinmad/emacs-ibuffer-project>
+
+#+begin_src emacs-lisp :tangle core/init-emacs-window.el :mkdirp yes
+;; [ibuffer-project] Group buffers by project root or directory.
+(use-package ibuffer-project
+  :straight t
+  :hook (ibuffer . +ibuffer-project-setup-h)
+  :preface
+  (defconst +ibuffer-special-filter-groups
+    '(("Agenda"
+       (derived-mode . org-agenda-mode))
+      ("Telega"
+       (or (mode . telega-chat-mode)
+           (mode . telega-root-mode)
+           (mode . telega-image-mode)
+           (mode . telega-webpage-mode)
+           (name . "^\\*Telegram")))
+      ("Elfeed"
+       (or (mode . elfeed-search-mode)
+           (mode . elfeed-show-mode)))
+      ("Eww"
+       (or (mode . eww-mode)
+           (mode . eww-bookmark-mode)
+           (mode . eww-history-mode)
+           (mode . eww-buffers-mode)
+           (mode . eww-search-annotations-mode)))
+      ("Xwidget"
+       (mode . xwidget-webkit-mode))
+      ("EMMS"
+       (predicate . (string-prefix-p "emms-" (symbol-name major-mode))))
+      ("Help"
+       (or (derived-mode . help-mode)
+           (mode . apropos-mode)
+           (mode . Info-mode)))
+      ("Scratch"
+       (name . "\\`\\*scratch\\*")))
+    "Filter groups shown before project and temporary buffers.")
+
+  (defun +ibuffer-project-filter-groups ()
+    "Return special, project, and temporary Ibuffer filter groups."
+    (let ((temporary-filter '(starred-name . "")))
+      (append
+       +ibuffer-special-filter-groups
+       (mapcar
+        (lambda (group)
+          (list (car group)
+                `(and ,(cadr group) (not ,temporary-filter))))
+        (ibuffer-project-generate-filter-groups))
+       `(("Temporary buffers" ,temporary-filter)))))
+
+  (defun +ibuffer-project-setup-h ()
+    "Refresh project groups and sort buffers by project-relative name."
+    (setq ibuffer-filter-groups (+ibuffer-project-filter-groups)
+          ibuffer-sorting-mode 'project-file-relative
+          ibuffer-sorting-reversep nil
+          ibuffer-last-sorting-mode 'project-file-relative)
+    ;; `ibuffer-hook' runs after Ibuffer's initial update, so redisplay once
+    ;; after rebuilding the dynamic project groups.
+    (ibuffer-update nil t))
+
+  :config
+  (setq ibuffer-formats
+        '((mark modified read-only locked " "
+                (name 25 25 :left :elide) " "
+                (size 9 -1 :right) " "
+                (mode 16 16 :left :elide) " "
+                project-file-relative)
+          (mark " "
+                (name 25 -1) " "
+                project-file-relative))))
 #+end_src
 
 *** The =init-emacs-window.el= section to provide the feature
