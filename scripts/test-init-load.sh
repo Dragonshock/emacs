@@ -50,11 +50,33 @@ else
     check PASS "output does not contain 'Unable to find theme file'"
 fi
 
+if grep -qF 'Two different recipes given for' "$out"; then
+    check FAIL "output does not contain 'Two different recipes given for'"
+else
+    check PASS "output does not contain 'Two different recipes given for'"
+fi
+
 if grep -qF 'Cannot open load file: ashen' "$out"; then
     check FAIL "output does not contain 'Cannot open load file: ashen'"
 else
     check PASS "output does not contain 'Cannot open load file: ashen'"
 fi
+
+# The GUI warning "Two different recipes given for corfu" comes from a
+# custom :files that disagrees with MELPA's recipe.  Assert the config no
+# longer carries one.
+for pkg in corfu vertico; do
+    recipe=$(awk -v pkg="$pkg" 'index($0, "(use-package " pkg) == 1 {found=1; next}
+                               found && /^\(/{exit}
+                               found && /:straight/{print; exit}' \
+                    "$repo_dir/emacs-config.org")
+    case "$recipe" in
+        *":straight t"*)
+            check PASS "$pkg uses MELPA's recipe (custom :files removed)" ;;
+        *)
+            check FAIL "$pkg uses MELPA's recipe (got: ${recipe:-none})" ;;
+    esac
+done
 
 # Exit 0 alone cannot tell "theme loaded" from "theme silently skipped":
 # assert the theme really is enabled.

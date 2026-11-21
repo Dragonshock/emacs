@@ -3,7 +3,9 @@
 ;;; Minibuffer
 
 (use-package vertico
-  :straight (:files (:defaults "extensions/*.el"))
+  ;; MELPA's recipe already ships extensions/vertico-*.el; a custom :files
+  ;; here made straight warn about two different recipes for the package.
+  :straight t
   :bind (:map vertico-map
               ("TAB" . minibuffer-complete)
               ("<tab>" . minibuffer-complete)
@@ -205,7 +207,10 @@
 ;;; In-buffer completion
 
 (use-package corfu
-  :straight (:files (:defaults "extensions/*.el"))
+  ;; MELPA's recipe already ships extensions/corfu-*.el, which covers
+  ;; corfu-history, corfu-popupinfo and corfu-quick.  A custom :files here
+  ;; made straight warn about two different recipes for the same package.
+  :straight t
   :hook (((prog-mode conf-mode yaml-mode shell-mode eshell-mode text-mode
                      agent-shell-mode agent-shell-viewport-edit-mode) . corfu-mode)
          ((eshell-mode shell-mode) . (lambda () (setq-local corfu-auto nil)))
