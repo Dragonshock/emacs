@@ -43,7 +43,6 @@
   (unless (daemonp)
     (once-enable-incremental-loading)))
 
-
 ;; [straight-overview]
 (use-package straight-overview
   :straight (:host github :repo "alberti42/straight-overview")

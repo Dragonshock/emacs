@@ -30,7 +30,6 @@
                             (file-name-base buffer-file-name)
                             (format-time-string "%Y")))))))
 
-
 ;; [org-refile]
 (use-package org-refile
   :hook (org-after-refile-insert . save-buffer)
@@ -45,7 +44,6 @@
         org-refile-use-outline-path 'file
         org-outline-path-complete-in-steps nil
         org-refile-allow-creating-parent-nodes 'confirm))
-
 
 ;; [org-capture]
 (use-package org-capture
@@ -104,7 +102,6 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
                             (file "agenda/calendar.org")
                             "* %^{Title}\n:PROPERTIES:\n:CREATED: %U\n:APPT_WARNTIME: %^{Warn before (minutes)|15}\n:END:\n%^{When}T\n%?\n"
                             :empty-lines 1))))
-
 
 ;; [org-agenda]
 (use-package org-agenda
@@ -216,7 +213,6 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
           ("s" "Someday" todo "SOMEDAY"
            ((org-agenda-skip-function #'+agenda-skip-habit))))))
 
-
 ;; [calendar]
 (use-package calendar
   :bind (("C-c o C" . calendar)
@@ -230,7 +226,6 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
         calendar-mark-holidays-flag t
         calendar-holidays holiday-oriental-holidays
         calendar-mark-diary-entries-flag t))
-
 
 ;; [calfw] One calendar view for Org entries and subscribed days off/workdays.
 (use-package calfw
@@ -316,11 +311,9 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
   (advice-remove 'calfw--render-toolbar #'calfw-blocks-render-toolbar)
   (advice-add 'calfw--contents-put-source :filter-return #'+calfw-block-contents))
 
-
 ;; [org-clock] Portable desktop notification backend.
 (use-package org-clock
   :commands (org-show-notification))
-
 
 ;; [appt] Convert today's timed Org entries into desktop notifications.
 (use-package appt
@@ -358,7 +351,6 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
   (appt-activate 1)
   (+appt-refresh)
   (run-at-time "00:01" 86400 #'+appt-refresh))
-
 
 ;; [org-pomodoro] Clock focused work sessions on the Org task at point.
 (use-package org-pomodoro

@@ -16,7 +16,6 @@
 ;; [Cursor] disable blinking
 (blink-cursor-mode -1)
 
-
 ;; [Line & column numbers] relative line numbers, plus column number in mode-line
 (setopt display-line-numbers-type 'relative)
 (global-display-line-numbers-mode 1)
@@ -35,7 +34,6 @@
                                   mu4e-view-mode-hook mu4e-compose-mode-hook mu4e-raw-view-mode-hook
                                   ghostel-mode-hook)
   #'+line-numbers-off-h)
-
 
 ;; [Fringes] Reduce the clutter in the fringes, but indicate eob lines
 (setq indicate-buffer-boundaries nil
@@ -71,7 +69,6 @@
    #b00000000
    #b00000000])
 
-
 ;; Allow [resize] by pixels.
 (setq frame-resize-pixelwise t
       window-resize-pixelwise t)
@@ -91,7 +88,6 @@
         (set-frame-parameter frame 'tool-bar-lines 0)
         (set-frame-parameter frame 'vertical-scroll-bars nil)))))
 
-
 ;; [Minibuffer]
 ;; Allow minibuffer commands while in the minibuffer.
 (setq enable-recursive-minibuffers t
@@ -106,7 +102,6 @@
 (add-hook! minibuffer-setup-hook #'cursor-intangible-mode)
 ;; Allow emacs to query passphrase through minibuffer
 (setq epg-pinentry-mode 'loopback)
-
 
 ;; CJK uses LXGW WenKai. It is proportional, so it is not the same width as PragmataPro.
 (defconst +default-font "PragmataPro 14")
@@ -162,7 +157,6 @@
               (set-fontset-font t target spec))))
         (setq +default-fontset-configured-p t)))))
 
-
 ;; Smooth Scroll (less "jumpy" than defaults)
 (setq mouse-wheel-scroll-amount '(2 ((shift) . hscroll) ((control) . nil))
       mouse-wheel-scroll-amount-horizontal 1
@@ -173,13 +167,11 @@
 ;; first-time startup on Emacs > 26.3.
 (setq custom-safe-themes t)
 
-
 ;; [window-divider] Display window divider
 (setq window-divider-default-places t
       window-divider-default-bottom-width 1
       window-divider-default-right-width 1)
 (add-hook! window-setup-hook #'window-divider-mode)
-
 
 ;; [ligature] ligature support for Emacs
 (use-package ligature
@@ -213,7 +205,6 @@
                             "+++" "++++" "---" "----" "___" "____" "###" "####"
                             "~~~" "~~~~")))
 
-
 ;; [scrollview] Show scroll progress in the fringe
 (use-package scrollview
   :straight (:type git :host github :repo "roife/scrollview.el" :branch "main")
@@ -224,6 +215,7 @@
 
 (setq frame-title-format
       '((:eval (or buffer-file-truename "%b"))))
+
 ;; [Kitty Graphics Protocol] Implements support for Kitty's "graphics protocol",
 ;; which allows the terminal to display images and videos inline.
 (use-package kitty-graphics

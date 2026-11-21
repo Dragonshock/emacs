@@ -6,7 +6,6 @@
   :init
   (setq org-persist-directory (no-littering-expand-var-file-name "org/persist/")))
 
-
 ;; [org]
 (use-package org
   :straight t
@@ -189,12 +188,10 @@
                                          1))
   (org-set-emph-re 'org-emphasis-regexp-components org-emphasis-regexp-components))
 
-
 ;; `org-element' and its `org-persist' dependency need Org loaded first.
 (use-package org-element
   :straight nil
   :require-incrementally (org t))
-
 
 ;; [ob-mermaid] Generate Mermaid diagrams through Org Babel
 (use-package ob-mermaid
@@ -206,7 +203,6 @@
   :config
   (setq ob-mermaid-default-config-file
         (no-littering-expand-etc-file-name "mermaid/config.json")))
-
 
 ;; [org-appear] Make invisible parts of Org elements appear visible.
 ;; `init-modal' is not loaded, so this does not depend on Meow.
@@ -222,14 +218,12 @@
         org-appear-delay 0.1
         org-appear-trigger 'always))
 
-
 ;; [org-fragtog] Toggle LaTeX fragment previews when point enters or leaves.
 ;; It calls `org-latex-preview' directly, so it does not follow
 ;; `org-typst-preview''s keymap remap, and it only matches LaTeX elements.
 (use-package org-fragtog
   :straight t
   :hook (org-mode . org-fragtog-mode))
-
 
 (use-package org-modern
   :straight t
@@ -248,7 +242,6 @@
         org-html-validation-link nil
         org-latex-prefer-user-labels t
         org-export-with-latex t))
-
 
 ;; [org-typst-preview] Render native Typst formulae asynchronously.
 (use-package org-typst-preview

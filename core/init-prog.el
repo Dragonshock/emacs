@@ -161,10 +161,8 @@ Diagnostics for all files are published separately for project listings."
 
   (add-hook 'compilation-finish-functions #'+compilation-flymake-finish-h))
 
-
 ;; [comment] comment over empty lines
 (setq comment-empty-lines t)
-
 
 ;; [xref] Cross reference
 (use-package xref
@@ -179,7 +177,6 @@ Diagnostics for all files are published separately for project listings."
    ;; TODO: https://github.com/oantolin/embark/issues/162#issuecomment-785039305
    ;; Maybe a bug?
    xref-history-storage 'xref-window-local-history))
-
 
 ;; [Eglot] LSP support
 (use-package eglot
@@ -260,13 +257,11 @@ Diagnostics for all files are published separately for project listings."
         (when flymake-mode
           (flymake-start))))))
 
-
 (use-package eglot-tempel
   :straight t
   :after (eglot tempel)
   :config
   (eglot-tempel-mode 1))
-
 
 ;; [Eldoc]
 (use-package eldoc
@@ -277,11 +272,9 @@ Diagnostics for all files are published separately for project listings."
         eldoc-echo-area-use-multiline-p nil
         eldoc-help-at-pt t))
 
-
 ;; [help]
 (use-package help
   :bind (("s-?" . display-local-help)))
-
 
 ;; [consult-eglot] Eglot support for consult
 (use-package consult-eglot
@@ -290,7 +283,6 @@ Diagnostics for all files are published separately for project listings."
   :bind (:map eglot-mode-map
               ([remap xref-find-apropos] . consult-eglot-symbols)))
 
-
 ;; [webpaste] Web Pastebin
 (use-package webpaste
   :straight t
@@ -298,7 +290,6 @@ Diagnostics for all files are published separately for project listings."
   (setq webpaste-paste-confirmation t
         webpaste-add-to-killring t
         webpaste-provider-priority '("paste.rs")))
-
 
 ;; [dumb-jump] Jump to definition (integrated with xref, a fallback of lsp)
 (use-package dumb-jump
@@ -310,7 +301,6 @@ Diagnostics for all files are published separately for project listings."
         dumb-jump-selector 'completing-read
         dumb-jump-aggressive t
         dumb-jump-default-project nil))
-
 
 ;; [citre] Ctags-infra
 (use-package citre
@@ -335,14 +325,12 @@ Diagnostics for all files are published separately for project listings."
   (with-eval-after-load 'dired (require 'citre-lang-fileref))
   (with-eval-after-load 'verilog-mode (require 'citre-lang-verilog)))
 
-
 ;; [quickrun] Run commands quickly
 (use-package quickrun
   :straight t
   :bind (("C-c r r" . quickrun))
   :config
   (setq quickrun-focus-p nil))
-
 
 ;; [dape] Debug Adapter Protocol client
 (use-package dape
@@ -352,7 +340,6 @@ Diagnostics for all files are published separately for project listings."
   :config
   ;; Save file-visiting buffers before starting a debug session.
   (add-hook! dape-start-hook (save-some-buffers t t)))
-
 
 ;; [flymake] On-the-fly syntax checker
 (use-package flymake
@@ -388,7 +375,6 @@ separate argument, although the command accepts only one."
               #'+flymake-show-buffer-diagnostics-single-a)
   (setq flymake-show-diagnostics-at-end-of-line 'short))
 
-
 ;; [indent-bars] Show indent guides
 (use-package indent-bars
   :straight (indent-bars :type git :host github :repo "jdtsmith/indent-bars")
@@ -408,12 +394,10 @@ separate argument, although the command accepts only one."
 
   (add-hook! enable-theme-functions #'indent-bars-reset))
 
-
 ;; [direnv] Buffer-local project environments
 (use-package envrc
   :straight t
   :hook (emacs-startup . envrc-global-mode))
-
 
 ;; [log-view-mode]
 (use-package logview
@@ -428,6 +412,7 @@ separate argument, although the command accepts only one."
   (logview-additional-submodes
    '(("Pipeline" . ((format . "[TIMESTAMP] [LEVEL] [NAME] MESSAGE")
                     (levels . "Pipeline levels"))))))
+
 ;;; -*- lexical-binding: t -*-
 
 (defun cargo-xtask-install-server ()

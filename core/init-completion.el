@@ -15,7 +15,6 @@
   (setq vertico-cycle t
         vertico-count 15))
 
-
 (use-package vertico-directory
   :after vertico
   :bind (:map vertico-map
@@ -23,12 +22,10 @@
               ("DEL" . vertico-directory-delete-char)
               ("M-DEL" . vertico-directory-delete-word)))
 
-
 (use-package vertico-quick
   :after vertico
   :bind (:map vertico-map
               ("C-," . vertico-quick-jump)))
-
 
 (use-package vertico-buffer
   :after vertico
@@ -40,7 +37,6 @@
   (defadvice! +vertico-buffer-disbale-mode-line ()
     :before #'vertico-buffer--setup
     (mode-line-invisible-mode)))
-
 
 ;;; Matching styles
 
@@ -74,11 +70,9 @@
         completions-sort 'historical
         completion-pcm-leading-wildcard t))
 
-
 (use-package marginalia
   :straight t
   :hook (vertico-mode . marginalia-mode))
-
 
 ;;; Actions and search commands
 
@@ -109,11 +103,9 @@
     (interactive "GFile: ")
     (magit-status (locate-dominating-file file ".git"))))
 
-
 (use-package embark-consult
   :straight t
   :after (embark consult))
-
 
 (use-package consult
   :straight t
@@ -182,7 +174,6 @@
                      :file-handler t))))
   (add-to-list 'consult-buffer-sources '+consult-source-fd 'append))
 
-
 (use-package avy-embark-collect
   :straight (:host github :repo "oantolin/embark"
                    :files ("avy-embark-collect.el"))
@@ -190,7 +181,6 @@
   :bind (:map embark-collect-mode-map
               ("j" . avy-embark-collect-choose)
               ("J" . avy-embark-collect-act)))
-
 
 ;; [consult-dir] Insert path quickly in minibuffer
 (use-package consult-dir
@@ -202,7 +192,6 @@
   :config
   (add-to-list 'consult-dir-sources 'consult-dir--source-tramp-ssh t)
   (add-to-list 'consult-dir-sources 'consult-dir--source-tramp-local t))
-
 
 ;;; In-buffer completion
 
@@ -262,7 +251,6 @@
   :bind (:map corfu-map
               ("C-, ," . corfu-quick-complete)))
 
-
 (use-package cape
   :straight t
   :hook ((TeX-mode LaTeX-mode org-mode markdown-ts-mode) . +cape-tex-setup)
@@ -273,7 +261,6 @@
 
   (defun +cape-tex-setup ()
     (add-hook 'completion-at-point-functions #'cape-tex 90 t)))
-
 
 ;;; Snippets
 
@@ -295,11 +282,9 @@
                   (setq +tempel-trigger-capf (cape-capf-trigger #'tempel-complete ?/)))
               -90 t)))
 
-
 (use-package tempel-collection
   :straight t
   :after tempel)
-
 
 (use-package dabbrev
   :config

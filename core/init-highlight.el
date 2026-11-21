@@ -9,7 +9,6 @@
         hl-line-range-function (lambda () (cons (line-end-position)
                                                 (line-beginning-position 2)))))
 
-
 ;; [show-paren-mode] Highlight matching parens
 (use-package paren
   :custom-face (show-paren-match ((t (:foreground "SpringGreen3" :underline t :weight bold))))
@@ -21,7 +20,6 @@
         blink-matching-paren-highlight-offscreen t
         show-paren-delay 0.2))
 
-
 ;; [whitespace] Show visualize TAB, (HARD) SPC, newline
 (use-package whitespace
   :hook ((prog-mode conf-mode yaml-mode) . whitespace-mode)
@@ -30,11 +28,9 @@
   (setq whitespace-style
         '(face trailing empty indentation space-before-tab space-after-tab)))
 
-
 ;; [display-fill-column-indicator] Show a line at 80 char
 (use-package display-fill-column-indicator
   :hook (prog-mode . display-fill-column-indicator-mode))
-
 
 ;; [rainbow-delimiters] Highlight brackets according to their depth
 (use-package rainbow-delimiters
@@ -42,7 +38,6 @@
   :hook ((prog-mode conf-mode yaml-mode) . rainbow-delimiters-mode)
   :config
   (setq rainbow-delimiters-max-face-count 5))
-
 
 ;; [highlight-parentheses] Highlight surrounding parentheses
 ;; Disabled: the underlined outer parens are too noisy next to
@@ -56,14 +51,12 @@
 ;;         highlight-parentheses-attributes '((:underline t) (:underline t) (:underline t))
 ;;         highlight-parentheses-delay 0.25))
 
-
 ;; [rainbow-mode] Colorize color names in buffers
 (use-package rainbow-mode
   :straight t
   :bind (:map help-mode-map
               ("r" . rainbow-mode))
   :hook ((html-mode css-mode) . rainbow-mode))
-
 
 ;; [hl-todo] Highlight TODO and similar keywords in comments and strings
 (use-package hl-todo
@@ -87,7 +80,6 @@
       (+hl-todo-add-keywords '("BUG" "DEFECT" "ISSUE") (face-foreground 'error))
       (+hl-todo-add-keywords '("WORKAROUND" "HACK" "TRICK") (face-foreground 'warning)))))
 
-
 ;; [goggles] Highlight modified region
 ;; Disabled: it only pulses undo/yank/kill/delete/transpose, so plain
 ;; typing never triggers it.
@@ -96,7 +88,6 @@
 ;;   :hook ((prog-mode text-mode) . goggles-mode)
 ;;   :config
 ;;   (setq-default goggles-pulse nil))
-
 
 ;; [pulse] Highlight line at cursor after switching window
 (use-package pulse
@@ -144,7 +135,6 @@
         (when (overlayp pulse-momentary-overlay)
           (overlay-put pulse-momentary-overlay 'window window))))))
 
-
 ;; [symbol-overlay] Highlight symbols
 (use-package symbol-overlay
   :straight (:host github :repo "roife/symbol-overlay" :branch "master")
@@ -160,7 +150,6 @@
   :hook (((prog-mode yaml-mode) . symbol-overlay-mode))
   :config
   (setq symbol-overlay-temp-highlight-on-region t))
-
 
 ;; [highlight]
 (use-package hilit-chg

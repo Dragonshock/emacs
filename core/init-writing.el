@@ -37,12 +37,10 @@
                         :inherit (intern (format "org-level-%d" (1+ i)))
                         :weight 'unspecified)))
 
-
 ;; [md-babel] Execute Markdown fenced blocks through Org Babel
 (use-package md-babel
   :straight (:host github :repo "roife/md-babel")
   :hook (markdown-ts-mode . md-babel-mode))
-
 
 ;; [typst-ts-mode]
 (use-package typst-ts-mode
@@ -72,16 +70,13 @@
         ;; Just save, don't ask before each compilation.
         TeX-save-query nil))
 
-
 ;; [cdlatex]
 (use-package cdlatex
   :straight t)
 
-
 ;; [reftex]
 (use-package reftex
   :straight (:type built-in))
-
 
 (use-package mermaid-mode
   :straight t

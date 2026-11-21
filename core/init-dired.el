@@ -47,7 +47,6 @@
   (setq dired-create-destination-dirs 'ask
         dired-vc-rename-file t))
 
-
 ;; [dired-x] Extra Dired functionality
 (use-package dired-x
   :after dired
@@ -60,12 +59,10 @@
         ;; Disable the prompt about killing the Dired buffer for a deleted directory.
         dired-clean-confirm-killing-deleted-buffers nil))
 
-
 ;; [fd-dired] Using `fd' with `find-dired'
 (use-package fd-dired
   :straight t
   :bind ([remap find-dired] . fd-dired))
-
 
 ;; [dired-hacks] Several additional extensions for dired
 (use-package dired-hacks
@@ -97,7 +94,6 @@
     :bind (:map dired-mode-map
                 (";" . dired-narrow-fuzzy))))
 
-
 ;; [ffx] `dired-collapse'-style folding for file-name completion.
 ;; When a directory holds a single sub-directory chain (ignoring the same
 ;; entries `dired-omit-mode' hides), offer an extra candidate that jumps
@@ -108,7 +104,6 @@
 (use-package ffx
   :straight (:host github :repo "roife/ffx.el")
   :hook (after-init . ffx-mode))
-
 
 ;; [diredfl] Make dired colorful
 (use-package diredfl

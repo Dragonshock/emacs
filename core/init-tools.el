@@ -6,7 +6,6 @@
   (setq speedbar-prefer-window t
         speedbar-window-default-width 30))
 
-
 ;; [emureader] read docs in emacs.  The package renamed from `reader' and
 ;; its module from `render-core' to `emureader-dyn' (see its Makefile).
 (use-package emureader

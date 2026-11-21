@@ -37,7 +37,6 @@
                 (interactive)
                 (+aw--select-window (1+ n))))))
 
-
 ;; [winner] Restore old window configurations
 (use-package winner
   :commands (winner-undo winner-redo)
@@ -49,7 +48,6 @@
         '("*Completions*" "*Compile-Log*" "*inferior-lisp*" "*Fuzzy Completions*"
           "*Apropos*" "*Help*" "*cvs*" "*Buffer List*" "*Ibuffer*"
           "*esh command on file*")))
-
 
 ;; [popper] Enforce rules for popup windows like *Help*
 (use-package popper
@@ -145,7 +143,6 @@
         (select-window window))
       window))
   (setq popper-display-function #'+popper-smart-popup))
-
 
 ;; [zoom] Managing the window sizes automatically
 (use-package zoom

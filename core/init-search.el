@@ -23,18 +23,15 @@
    isearch-wrap-pause t
    regexp-search-ring-max 200))
 
-
 ;; [ezf] Use Emacs completion from terminal shells
 (use-package ezf
   :straight (:type git :host github :repo "roife/ezf")
   :commands ezf-client)
 
-
 ;; [goto-addr] Click to open URL
 (use-package goto-addr
   :hook ((text-mode . goto-address-mode)
          (prog-mode . goto-address-prog-mode)))
-
 
 ;; [avy] Jump with several key strock
 (use-package avy
@@ -47,7 +44,6 @@
   :config
   ;; overlay is used during isearch, `pre' style makes avy keys evident.
   (setq avy-styles-alist '((avy-isearch . pre))))
-
 
 ;; [link-hint] Open URL in text with avy
 (use-package link-hint

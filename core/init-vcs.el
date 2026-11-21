@@ -9,14 +9,12 @@
         vc-allow-rewriting-published-history t
         vc-dir-auto-hide-up-to-date 'revert))
 
-
 ;; [git-link] Get remote repo URL for buffer location
 (use-package git-link
   :straight t
   :bind (("C-, g l" . git-link)
          ("C-, g c" . git-link-commit)
          ("C-, g h" . git-link-homepage)))
-
 
 ;; [diff-hl] Highlight uncommitted changes using VC
 (use-package diff-hl
@@ -68,7 +66,6 @@
   (add-function :after after-focus-change-function
                 #'+diff-hl-update-after-focus-change))
 
-
 ;; [magit] Version control interface
 (use-package magit
   :straight t
@@ -114,7 +111,6 @@
   (transient-append-suffix 'magit-diff '(-1 -1)
     [("D" "Difftastic Diff" +toggle-magit-difftastic)]))
 
-
 (use-package magit-difftastic
   :straight (:host github :repo "rschmukler/magit-difftastic")
   :require-incrementally t
@@ -123,7 +119,6 @@
   (setq magit-difftastic-display "inline"
         magit-difftastic-line-numbers nil
         magit-difftastic-syntax-highlight nil))
-
 
 ;; Use the GitHub CLI credential directly.  Keep the token in memory only
 ;; and fetch it lazily.
@@ -149,7 +144,6 @@
         (+ghub--token-from-gh-cli)
       (funcall fn host username package nocreate forge))))
 
-
 (use-package forge
   :straight t
   :require-incrementally t
@@ -161,7 +155,6 @@
   :custom-face
   (forge-topic-label ((t (:inherit variable-pitch :height 0.9 :width condensed :weight regular :underline unspecified)))))
 
-
 ;; Show TODOs in magit
 (use-package magit-todos
   :straight t
@@ -170,7 +163,6 @@
   :init
   (setq magit-todos-update nil)
   (magit-todos-mode 1))
-
 
 ;; [remoto] Browse GitHub repositories without cloning
 (use-package remoto
@@ -187,7 +179,6 @@
       (funcall fn forge)))
   (advice-add #'remoto--warm-auth :override #'ignore)
   (advice-add #'remoto--find-token :around #'+remoto-github-token-from-gh-cli))
-
 
 ;; [smerge] Highlight all the conflicted regions for git
 (use-package smerge-mode
@@ -226,18 +217,15 @@
   :hook ((find-file . +smerge-try-smerge)
          (smerge-mode . +smerge-flymake-setup-h)))
 
-
 ;; [browse-at-remote] Open github/gitlab/bitbucket page
 (use-package browse-at-remote
   :straight t
   :bind (:map vc-prefix-map
               ("B" . browse-at-remote)))
 
-
 ;; [git-modes] Git configuration major modes
 (use-package git-modes
   :straight t)
-
 
 ;; [abridge-diff]
 (use-package abridge-diff

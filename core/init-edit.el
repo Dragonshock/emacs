@@ -9,10 +9,8 @@
 
 (kill-ring-deindent-mode)
 
-
 ;; Make script file executable with `chmod +x' after save
 (add-hook! after-save-hook #'executable-make-buffer-file-executable-if-script-p)
-
 
 ;; [autorevert]
 (use-package autorevert
@@ -62,17 +60,14 @@
       (funcall fn 'after-save-hook #'+auto-revert-visible-buffers-h)
       (funcall fn 'server-switch-hook #'+auto-revert-buffer-h))))
 
-
 ;; [ws-butler] Remove trailing whitespace with lines touched
 (use-package ws-butler
   :straight t
   :hook ((prog-mode markdown-ts-mode) . ws-butler-mode))
 
-
 ;; [editorconfig] Respect project-local formatting rules
 (use-package editorconfig
   :hook (after-init . editorconfig-mode))
-
 
 ;; [apheleia] Format buffers asynchronously without moving point
 (use-package apheleia
@@ -82,7 +77,6 @@
   :hook (after-init . apheleia-global-mode)
   :config
   (setq apheleia-hide-log-buffers t))
-
 
 ;; [ispell] Spell-checker backend
 (use-package ispell
@@ -114,7 +108,6 @@
         ispell-dictionary "en_US"
         ispell-personal-dictionary (no-littering-expand-var-file-name "ispell/.pws")))
 
-
 ;; [flyspell] Spell-checking overlays for writing modes
 (use-package flyspell
   :hook ((org-mode markdown-mode markdown-ts-mode typst-ts-mode
@@ -136,7 +129,6 @@
         flyspell-issue-welcome-flag nil
         flyspell-use-meta-tab nil
         flyspell-delay-use-timer t))
-
 
 ;; [ediff] Diff & patch
 (use-package ediff
@@ -162,7 +154,6 @@
         ;; turn off whitespace checking
         ediff-diff-options "-w"))
 
-
 ;; [elec-pair] Automatic parenthesis pairing
 (use-package elec-pair
   :preface
@@ -173,13 +164,11 @@
   :hook (((prog-mode conf-mode yaml-mode org-mode markdown-ts-mode minibuffer-mode) . electric-pair-mode)
          ((comint-mode eshell-mode) . +electric-pair-shell-setup)))
 
-
 ;; [mwim] Better C-a C-e for programming
 (use-package mwim
   :straight t
   :bind (([remap move-beginning-of-line] . mwim-beginning-of-code-or-line)
          ([remap move-end-of-line] . mwim-end-of-code-or-line)))
-
 
 ;; [beginend] Better M-< M-> for programming
 (use-package beginend
@@ -197,15 +186,12 @@
   ;; Install explicitly in case `beginend-global-mode' is already enabled.
   (add-hook! telega-root-mode-hook #'beginend-telega-root-mode))
 
-
 ;; Alternatives to [hungry-delete]
 (setq backward-delete-char-untabify-method 'hungry)
-
 
 ;; [subword] Handling capitalized subwords
 (use-package subword
   :hook (((prog-mode minibuffer-setup) . subword-mode)))
-
 
 ;; [easy-kill] Kill & Mark things easily, extends functionality of M-w
 (use-package easy-kill
@@ -213,13 +199,11 @@
   :bind (([remap kill-ring-save] . easy-kill)
          ([remap mark-sexp] . easy-mark)))
 
-
 ;; [sudo-edit] edit file with su permissions
 (use-package sudo-edit
   :straight t
   :config
   (sudo-edit-indicator-mode t))
-
 
 ;; [puni]
 (use-package puni
@@ -243,15 +227,16 @@
 (use-package dtrt-indent
   :straight t
   :hook (prog-mode . dtrt-indent-mode))
+
 ;; [expreg]
 (use-package expreg
   :straight t
   :bind (("C-=" . expreg-expand)
          ("C--" . expreg-contract)))
+
 ;; [ialign] Interactive align
 (use-package ialign
   :straight t)
-
 
 ;; [hideshow] Code folding
 (use-package hideshow
@@ -292,14 +277,12 @@
   (setq hs-indicator-type nil
         hs-display-lines-hidden t))
 
-
 ;; [vundo] Undo tree
 (use-package vundo
   :straight t
   :config
   (setq vundo-compact-display t
         vundo-roll-back-on-quit t))
-
 
 ;; [undohist] Persist undo history
 (use-package undo-fu-session
@@ -312,12 +295,10 @@
     ;; There are other algorithms available, but zstd is the fastest
     (setq undo-fu-session-compression 'zst)))
 
-
 ;; [undo-hl] Highlight undo changes
 (use-package undo-hl
   :straight (:host github :repo "casouri/undo-hl")
   :hook (((prog-mode text-mode conf-mode) . undo-hl-mode)))
-
 
 ;; [re-builder]
 (use-package re-builder
@@ -327,7 +308,6 @@
               ("C-c C-n" . reb-next-match))
   :config
   (setq reb-re-syntax 'string))
-
 
 ;; [separedit]
 (use-package separedit

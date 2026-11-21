@@ -302,6 +302,7 @@ When RUN-HN is non-nil (or `+elfeed-hn-llm'), export ELFEED_HN_LLM=1."
                  (or (file-in-directory-p file elfeed-db-directory)
                      (file-in-directory-p file elfeed-enclosure-default-dir))))
   )
+
 ;; -*- lexical-binding: t; -*-
 (use-package telega
   :straight (:host github :repo "zevlg/telega.el"
@@ -661,7 +662,6 @@ text properties are invalid."
     (telega-alert-mode 1))
   )
 
-
 (use-package telega-dired-dwim
   :after telega
   :demand t)
@@ -691,6 +691,7 @@ text properties are invalid."
         chirp-show-tweet-media nil
         chirp-tweet-separator ""
         chirp-tweet-separator-indent 0))
+
 ;; [browse-url] Pass a URL to browser
 (use-package browse-url
   :bind (("C-, o" . browse-url-at-point)

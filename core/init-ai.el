@@ -45,12 +45,10 @@ WebKit stores the value as a UTF-16LE blob.  Fall back to whatever
   (add-hook! gptel-post-stream-hook #'gptel-auto-scroll)
   (add-hook! gptel-post-response-functions #'gptel-end-of-response))
 
-
 (use-package gptel-agent
   :straight t
   :after gptel
   :config (gptel-agent-update))
-
 
 (use-package gptel-magit
   :straight (gptel-magit :type git :host github :repo "roife/gptel-magit")
@@ -514,7 +512,6 @@ Pi treats the text before the first slash as the provider, so
     (require 'agent-review)
     (require 'agent-shell-xai)
     (agent-review (agent-shell-xai-make-grok-config))))
-
 
 ;; [gptel-copilot] gptel-powered inline code completion
 (use-package gptel-copilot

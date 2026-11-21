@@ -127,7 +127,6 @@
 (with-eval-after-load 'help-fns
   (put 'help-fns-edit-variable 'disabled nil))
 
-
 ;; [autosave]
 ;; TRICK: If a file has autosaved data, `after-find-file' will pause for 1 second to
 ;; tell about it, which is very annoying. Just disable it.
@@ -135,7 +134,6 @@
   :around #'after-find-file
   (cl-letf (((symbol-function #'sit-for) #'ignore))
     (apply fn args)))
-
 
 ;; Encoding & locale
 (set-locale-environment "en_US.UTF-8")
@@ -150,7 +148,6 @@
       (unless (display-graphic-p frame)
         (set-keyboard-coding-system 'utf-8-unix frame)
         (set-terminal-coding-system 'utf-8-unix frame t)))))
-
 
 ;; History
 ;;; [save-place-mode] save place lastly visited
@@ -179,7 +176,6 @@
   (defadvice! +save-place-recenter-a (&rest _)
     :after #'save-place-find-file-hook
     (when buffer-file-name (ignore-errors (recenter)))))
-
 
 ;;; [recentf] recently visited files
 (use-package recentf
@@ -213,7 +209,6 @@
   (add-hook! dired-mode-hook
     (defun +dired--add-to-recentf-h ()
       (recentf-add-file default-directory))))
-
 
 ;;; [savehist] Save variables to file
 (use-package savehist
@@ -255,7 +250,6 @@
           (dogears-list (mapcar #'+dogears--record-for-savehist dogears-list)))
       (apply save args))))
 
-
 ;; [so-long] Workaround for long one-line file
 (use-package so-long
   :hook ((after-init . global-so-long-mode))
@@ -288,7 +282,6 @@
                       (font-lock-maximum-decoration . 1)
                       (save-place-alist . nil)))
     (add-to-list 'so-long-variable-overrides override)))
-
 
 ;; [glyphless-display] Don't render glyphs, in case of undisplayable characters.
 (use-package glyphless-mode
@@ -327,7 +320,6 @@
  ("C-v" . +scroll-window)
  ("M-v" . +scroll-window-down))
 
-
 ;; [tramp] Edit file remotely
 (use-package tramp
   :config
@@ -349,7 +341,6 @@
   (setq tramp-rpc-deploy-auto-deploy t
         tramp-rpc-deploy-git-build-policy 'release))
 
-
 ;; [minibuffer]
 (use-package minibuffer
   :hook (after-init . minibuffer-electric-default-mode)
@@ -357,7 +348,6 @@
   (setq minibuffer-default-prompt-format " [%s]" ; shorten " (default %s)" => " [%s]"
         ;; One frame one minibuffer.
         minibuffer-follows-selected-frame nil))
-
 
 ;; [comint] Command interpreter
 (use-package comint
@@ -370,7 +360,6 @@
 
         ;; better history search
         comint-history-isearch 'dwim))
-
 
 ;; [environment variables]
 (use-package exec-path-from-shell
@@ -387,11 +376,9 @@
   ;; the login-shell environment before the rest of the configuration loads.
   (exec-path-from-shell-initialize))
 
-
 ;; [backup walker] A utility to view Emacs backup files.
 (use-package backup-walker
   :straight t)
-
 
 ;; [posframe]
 (use-package posframe :straight t)
@@ -615,13 +602,11 @@ If no project is found, create a temporary Eshell instance in the current direct
                  (not (string-match-p "^Eshell-popup: " (buffer-name))))
         (rename-buffer (concat "Esh: " (abbreviate-file-name default-directory)) t)))))
 
-
 ;; [esh-syntax-highlighting] Fish-like syntax highlighting
 (use-package eshell-syntax-highlighting
   :straight t
   :after eshell
   :hook (eshell-mode . eshell-syntax-highlighting-mode))
-
 
 ;; [eshell-z] `cd' to frequent directory in `eshell'
 (use-package eshell-z
@@ -629,11 +614,9 @@ If no project is found, create a temporary Eshell instance in the current direct
   :after eshell
   :commands (eshell/z))
 
-
 (use-package esh-autosuggest-corfu
   :straight (:host github :repo "roife/esh-autosuggest-corfu")
   :hook (eshell-mode . esh-autosuggest-corfu-mode))
-
 
 (use-package esh-help
   :straight t
@@ -659,7 +642,6 @@ If no project is found, create a temporary Eshell instance in the current direct
                  (substring str (string-match-p "[^\s\t]" str)))
            esh-help-man-cache))))))
 
-
 ;; [esh-tldr] Browse local tldr pages
 (use-package esh-tldr
   :straight (:host github :repo "roife/esh-tldr")
@@ -668,7 +650,6 @@ If no project is found, create a temporary Eshell instance in the current direct
   :bind ("C-h t" . esh-tldr-dwim)
   :config
   (setq esh-tldr-use-tempel t))
-
 
 (use-package eshell-did-you-mean
   :straight t
@@ -683,7 +664,6 @@ If no project is found, create a temporary Eshell instance in the current direct
     (unless eshell-did-you-mean--all-commands
       (setq eshell-did-you-mean--all-commands
             (all-completions "" (pcomplete-completions))))))
-
 
 (use-package ghostel
   :straight t
@@ -732,6 +712,7 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 
 (use-package ghostel-eshell
   :hook (eshell-load . ghostel-eshell-visual-command-mode))
+
 ;; warp/truncation indicator in tty
 (set-display-table-slot standard-display-table
                         'wrap
@@ -740,6 +721,7 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 (set-display-table-slot standard-display-table
                         'truncation
                         (make-glyph-code ?… 'shadow))
+
 ;; [Kitty Keyboard Protocol] Implements support for Kitty's "keyboard protocol",
 ;; which allows the terminal to send key events to Emacs.
 (use-package kkp
@@ -749,6 +731,7 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
   ;; Read when the mode turns on, so this has to precede it. KKP sends
   ;; C-g as CSI-u; without this, a blocking call-process cannot be quit.
   (setq kkp-restore-legacy-keys-around-subprocesses t))
+
 ;; [xterm]
 (use-package term/xterm
   :hook (tty-setup . xterm-mouse-mode)
