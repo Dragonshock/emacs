@@ -4,10 +4,67 @@ Single source of truth: [`emacs-config.org`](emacs-config.org). `early-init.el`,
 `init.el` and everything under `core/` are tangled from it — do not edit the
 generated files.
 
-## Requirements
+## System dependencies
 
-- Emacs 31.1 or newer (native compilation expected)
-- git, plus network access on the first start (straight clones the packages)
+The configuration starts without any optional tool: modules that need a missing
+program skip themselves instead of failing. Install what you actually use.
+
+### Required
+
+| Tool | Why |
+|---|---|
+| Emacs 31.1+ | the config uses 31-only APIs; a native-compilation build is expected |
+| git | straight.el clones all packages |
+| `make` + a C compiler (`cc`) | native compilation, emureader's `:pre-build` |
+| `libgccjit` | native compilation (bundled by Nix/Homebrew builds) |
+| network access on first start | straight installs ~150 packages |
+
+### Recommended
+
+| Tool | Used by |
+|---|---|
+| `ripgrep` (`rg`) | consult-ripgrep, agent-recall |
+| `fd` | consult-fd |
+| `gh` | ghub/forge GitHub tokens |
+| `sqlite3` + `xxd` + `iconv` | reading Magpie's model picker |
+| `coreutils` (`gls` on macOS) | dired's long listing on macOS |
+| `zstd` | archive handling |
+| `aspell` | ispell/flyspell |
+| `fish` | exec-path-from-shell (falls back to `$SHELL`, then `shell-file-name`) |
+
+### Optional, by feature
+
+- Mail: `mu`, `msmtp`, `mbsync` (mu4e)
+- Passwords: `pass`, `gpg` (password-store)
+- Writing: `typst`, a TeX distribution (`latex`), `mermaid-cli` (`mmdc`)
+- Languages: `rust-analyzer`, `jdtls`, `clangd`, `pyright` (eglot); `ctags` (citre); `python3` + `jupyter`
+- Terminal: `ghostty` (ghostel), plus `zig`/`make` if the module must be built
+- Telegram: `cmake` + TDLib (telega)
+- Git extras: `difftastic` (magit-difftastic)
+- Fonts: LXGW WenKai (CJK), MonoLisa (ligatures)
+
+Missing helper scripts (`scripts/hn-elfeed.py`, `scripts/install-telega-tdlib`,
+`scripts/update-elfeed-feeds`) only disable the related commands; they are not
+required for startup.
+
+### Quick install
+
+macOS (Homebrew). Homebrew's `emacs` may lag behind 31.1; prefer
+[emacs-plus](https://github.com/d12frosted/homebrew-emacs-plus) or Nix:
+
+```sh
+brew install git ripgrep fd gh sqlite3 coreutils zstd aspell vim \
+             mu isync msmtp pass gnupg typst python3
+```
+
+Nix:
+
+```sh
+nix profile install nixpkgs#emacs nixpkgs#git nixpkgs#ripgrep nixpkgs#fd \
+  nixpkgs#gh nixpkgs#sqlite nixpkgs#coreutils nixpkgs#zstd nixpkgs#aspell \
+  nixpkgs#mu nixpkgs#isync nixpkgs#msmtp nixpkgs#pass nixpkgs#gnupg \
+  nixpkgs#typst nixpkgs#python3
+```
 
 ## Install
 
