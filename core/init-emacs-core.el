@@ -138,7 +138,8 @@
 ;; Encoding & locale
 (set-locale-environment "en_US.UTF-8")
 (prefer-coding-system 'utf-8-unix)
-(setq-default default-input-method nil)
+;; NOTE: `default-input-method' is owned by the `init-emacs-ime' module ("rimel");
+;; core no longer touches it (handoff on 2026-11-21).
 (setq system-time-locale "C")
 
 (add-hook! (tty-setup-hook server-after-make-frame-hook)

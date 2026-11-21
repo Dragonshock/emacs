@@ -11,12 +11,15 @@
 ;;   init-emacs-util  first: every other module uses its `add-hook!' / `defadvice!'
 ;;   init-emacs-theme before init-emacs-platform: the platform files call
 ;;              `+system-appearance-changed' at load time.
+;;   init-emacs-ime   right after core: it owns `default-input-method' and runs
+;;              `+liberime-setup-build-env' before any liberime build.
 
 (add-to-list 'load-path (expand-file-name "core" user-emacs-directory))
 
 (require 'init-emacs-util)
 (require 'init-emacs-straight)
 (require 'init-emacs-core)
+(require 'init-emacs-ime)
 (require 'init-emacs-theme)
 (require 'init-emacs-ui)
 (require 'init-emacs-platform)

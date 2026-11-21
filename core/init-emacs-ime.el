@@ -1,0 +1,260 @@
+;;; -*- lexical-binding: t; -*-
+
+;; [sis] automatically switch input source
+(use-package sis
+  :straight t
+  :hook (;; When add space after chinese char, automatically switch to english mode
+         (liberime-after-start . sis-global-inline-mode)
+         ;; Enable the context-mode for all buffers
+         (liberime-after-start . sis-global-context-mode)
+         ;; Colored cursor
+         (liberime-after-start . sis-global-cursor-color-mode))
+  :init
+  ;; Use rimel as default
+  (sis-ism-lazyman-config nil "rimel" 'native)
+  (sis-get) ; HACK: set sis--ism
+  :config
+  (defun +ime-hide-input-method-title ()
+    "Do not show the Rime title at the left of the native mode line.
+`activate-input-method' fills `current-input-method-title' before this
+hook runs.  An empty title leaves input active and hides the mark."
+    (setq current-input-method-title ""))
+  (add-hook 'input-method-activate-hook #'+ime-hide-input-method-title)
+  (add-hook! buffer-list-update-hook
+    (defun +sis-refresh-cursor-color ()
+      (when sis-global-cursor-color-mode
+        (with-current-buffer (window-buffer (selected-window))
+          (sis--get)
+          (sis--update-cursor-color)))))
+
+  ;; HACK: Set cursor color automatically
+  (add-hook! (enable-theme-functions server-after-make-frame-hook) :unless-daemonp-call-immediately
+    (defun +sis-set-cursor-color (&rest _)
+      (setq sis-other-cursor-color (face-foreground 'error nil t)
+            sis-default-cursor-color (face-background 'cursor nil t))
+      (+sis-refresh-cursor-color)))
+
+  ;; Meow's restore hook updates the TTY cursor shape, but not its color.
+  (add-hook! sis-cursor-color-restore-hook
+    (defun +sis-restore-tty-cursor-color ()
+      (unless (display-graphic-p)
+        (send-string-to-terminal
+         (format "\e]12;%s\a" sis-default-cursor-color)))))
+
+  ;; Recover the terminal cursor color when leaving Emacs (TUI only).
+  (add-hook! kill-emacs-hook #'sis--reset-tty-cursor-color)
+
+  ;; Context mode.  sis already refreshes on entering meow's insert
+  ;; state.  meow is not loaded, so nothing is added here.
+
+  ;; Ignore some mode with context mode
+  (defadvice! +sis-context-guess-ignore-modes (fn &rest args)
+    :around #'sis--context-guess
+    (if (derived-mode-p 'pdf-view-mode)
+        'english
+      (apply fn args)))
+
+  (defun +sis-context-switching-other (back-detect fore-detect)
+    "Keep the other input source at the start of a Telega compose line.
+Only while meow insert state is active.  `bound-and-true-p' stays nil
+when meow is not loaded, instead of signaling `void-variable'."
+    (and (bound-and-true-p meow-insert-mode)
+         (derived-mode-p 'telega-chat-mode)
+         (= (point) telega-chatbuf--input-marker) ; beginning of input
+         (eolp)
+         'other))
+  (add-to-list 'sis-context-detectors #'+sis-context-switching-other)
+
+  ;; Inline-mode
+  (defconst +sis-chinese-puncs "，。？！；：、（）【】「」『』“”‘’《》〈〉")
+  (defconst +sis-chinese-punc-chars (string-to-list +sis-chinese-puncs))
+
+  (defvar-local +sis-inline-pending-space-pos nil
+    "Position after the space to remove before the next Chinese punctuation.")
+
+  (defun +sis-inline-clear-space ()
+    (setq-local +sis-inline-pending-space-pos nil)
+    (add-hook! pre-command-hook :local :remove #'+sis-inline-check-next-command)
+    (add-hook! post-self-insert-hook :local :remove #'+sis-inline-remove-redundant-space))
+
+  (defadvice! +sis-inline-record-space (fn &rest args)
+    :around #'sis--inline-deactivate
+    (let ((english-tail-p (and (eq sis--inline-lang 'english)
+                               (overlayp sis--inline-overlay)
+                               (= (point) (overlay-end sis--inline-overlay)))))
+      (prog1 (apply fn args)
+        (+sis-inline-clear-space)
+        (when (and sis-inline-mode english-tail-p
+                   (eq this-command 'self-insert-command)
+                   (eq (char-before) ?\s))
+          (setq-local +sis-inline-pending-space-pos (point))
+          (add-hook! pre-command-hook :local #'+sis-inline-check-next-command)
+          (add-hook! post-self-insert-hook :local #'+sis-inline-remove-redundant-space)))))
+
+  (defun +sis-inline-check-next-command ()
+    (unless (and sis-inline-mode
+                 (eq this-command 'self-insert-command)
+                 (eql (point) +sis-inline-pending-space-pos))
+      (+sis-inline-clear-space)))
+
+  (add-hook! sis-inline-mode-hook
+    (defun +sis-inline-remove-redundant-space ()
+      (when-let* ((pos +sis-inline-pending-space-pos))
+        ;; A composing input method may not have inserted anything yet.
+        (unless (= (point) pos)
+          (+sis-inline-clear-space)
+          (when (and (> (point) pos)
+                     (eq (char-before pos) ?\s)
+                     (memq (char-after pos) +sis-chinese-punc-chars))
+            (delete-region (1- pos) pos))))))
+
+  ;; Chinese punc adjustment for inline mode
+  (defun +sis-remove-head-space-after-cc-punc (_)
+    (when (or (memq (char-before) +sis-chinese-punc-chars)
+              (bolp))
+      (delete-char 1)))
+  (setq sis-inline-tighten-head-rule #'+sis-remove-head-space-after-cc-punc)
+
+  ;; Leave exactly one space at the end of an inline English span.
+  ;; `+sis-remove-tail-space-before-cc-punc' deletes that space whenever
+  ;; the span ends, so pressing RET after English drops it.
+  (setq sis-inline-tighten-tail-rule 'one))
+
+;; `y-or-n-p' and `read-char-choice' use `read-key' in this config.
+;; Read their literal keys without changing the buffer's input-method state.
+(defadvice! +ime-read-key-without-input-method (fn &rest args)
+  :around #'read-key
+  (let ((input-method-function nil))
+    ;; Restore the buffer before unwinding the buffer-local binding.
+    (save-current-buffer
+      (apply fn args))))
+
+(defun +liberime-prepend-env-path (name path)
+  (when (file-directory-p path)
+    (let ((value (getenv name)))
+      (unless (member path (and value (split-string value path-separator t)))
+        (setenv name
+                (if (and value (not (string= value "")))
+                    (concat path path-separator value)
+                  path))))))
+
+(defun +liberime-home-path ()
+  "Return the active Home Manager package directory, if any."
+  (let ((path (expand-file-name
+               "~/.local/state/home-manager/gcroots/current-home/home-path")))
+    (and (file-directory-p path) path)))
+
+(defun +liberime-nix-store-program ()
+  "Return an absolute nix-store executable, or nil."
+  (or (executable-find "nix-store")
+      (let ((fallback "/nix/var/nix/profiles/default/bin/nix-store"))
+        (and (file-executable-p fallback) fallback))))
+
+(defun +liberime-rime-prefix ()
+  "Return the librime prefix from the Home Manager rime.pc."
+  (let ((home (+liberime-home-path)))
+    (when home
+      (let ((pc (expand-file-name "lib/pkgconfig/rime.pc" home)))
+        (when (file-exists-p pc)
+          (directory-file-name
+           (file-name-directory
+            (directory-file-name
+             (file-name-directory (file-truename pc))))))))))
+
+(defun +liberime-deriver (output)
+  "Return the Nix derivation that produced OUTPUT, or nil."
+  (let ((program (+liberime-nix-store-program)))
+    (when (and program output)
+      (with-temp-buffer
+        (when (eq 0 (call-process program nil t nil "-q" "--deriver" output))
+          (let ((deriver (string-trim (buffer-string))))
+            (and (string-suffix-p ".drv" deriver)
+                 (file-readable-p deriver)
+                 deriver)))))))
+
+(defun +liberime-deriver-input (deriver relative)
+  "Return the first store path in DERIVER that contains RELATIVE."
+  (when (and deriver (file-readable-p deriver))
+    (with-temp-buffer
+      (insert-file-contents deriver)
+      (let (found)
+        (while (and (not found)
+                    (re-search-forward
+                     "/nix/store/[0-9a-z]+-[^\"'[:space:]]+" nil t))
+          (let ((path (match-string 0)))
+            (when (file-exists-p (expand-file-name relative path))
+              (setq found path))))
+        found))))
+
+(defun +liberime-setup-build-env ()
+  "Expose librime and its private headers to the native module builds.
+Home Manager puts librime on `home-path'.  `rime.pc` only lists the
+public headers; this also reaches librime's internal Boost and marisa
+include dirs from the librime derivation.  liberime-regexp no longer
+needs them: since its 2026-10 rework (c106a01) it is pure Elisp over
+librime-lua and builds nothing.  `~/.nix-profile' stays as a fallback."
+  (dolist (profile (delq nil (list (expand-file-name "~/.nix-profile")
+                                   (+liberime-home-path))))
+    (+liberime-prepend-env-path "CPATH" (expand-file-name "include" profile))
+    (+liberime-prepend-env-path "LIBRARY_PATH" (expand-file-name "lib" profile))
+    (+liberime-prepend-env-path "PKG_CONFIG_PATH"
+                                (expand-file-name "lib/pkgconfig" profile)))
+  (let* ((deriver (+liberime-deriver (+liberime-rime-prefix)))
+         (boost (+liberime-deriver-input
+                 deriver "include/boost/signals2/connection.hpp"))
+         (marisa (+liberime-deriver-input deriver "include/marisa.h")))
+    (when boost
+      (setenv "BOOST_INCLUDE" (expand-file-name "include" boost))
+      (+liberime-prepend-env-path "CPATH" (getenv "BOOST_INCLUDE")))
+    (when marisa
+      (let ((include (expand-file-name "include" marisa)))
+        (+liberime-prepend-env-path "CPATH" include)
+        (setenv "RIME_INTERNAL_CXXFLAGS" (concat "-I" include))))))
+
+(+liberime-setup-build-env)
+
+(use-package liberime
+  :straight (liberime :type git :host github :repo "emacs-rime/liberime"
+                      :pre-build ("make"))
+  :require-incrementally (t)
+  :init
+  (require 'xdg)
+  (setq liberime-shared-data-dir (if (eq system-type 'darwin)
+                                     (expand-file-name "~/Library/Rime/")
+                                   (expand-file-name "rime/" (xdg-data-home)))
+        liberime-user-data-dir liberime-shared-data-dir))
+
+(use-package liberime-regexp
+  :straight (:host github :repo "roife/liberime-regexp")
+  :require-incrementally (liberime t)
+  :hook ((liberime-after-start . liberime-regexp-enable)
+         (liberime-after-start . liberime-regexp-segment-mode))
+  :config
+  (setq liberime-regexp-candidate-limit 40))
+
+(use-package rimel
+  :straight (rimel :type git :host github :repo "emacs-rime/rimel")
+  :require-incrementally (liberime liberime-regexp t)
+  :custom-face
+  (rimel-candidate-label-face ((t (:inherit font-lock-comment-face :height 0.85))))
+  (rimel-page-indicator-face ((t (:inherit font-lock-comment-face :height 0.85))))
+  (rimel-highlight-face ((t (:inherit hl-line))))
+  :init
+  (setq default-input-method "rimel"
+        rimel-show-candidate 'posframe
+        rimel-inline-preedit t
+        rimel-candidate-show-preedit nil
+        rimel-posframe-style 'horizontal
+        rimel-posframe-properties nil
+        rimel-candidate-label-format "%d "
+        rimel-page-indicator-format "%d%s"
+        rimel-disable-predicates '(rimel-predicate-prog-in-code-p
+                                   rimel-predicate-after-alphabet-char-p
+                                   rimel-predicate-current-uppercase-letter-p
+                                   rimel-predicate-org-in-src-block-p
+                                   rimel-predicate-org-latex-mode-p
+                                   rimel-predicate-tex-math-or-command-p)))
+
+(register-input-method "rimel" "Chinese" #'rimel-activate "中" "Rimel")
+
+(provide 'init-emacs-ime)
