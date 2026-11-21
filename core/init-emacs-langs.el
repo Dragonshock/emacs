@@ -129,4 +129,4 @@
   (setq treesit-enabled-modes t
         treesit-auto-install-grammar 'always))
 
-(provide 'init-langs)
+(provide 'init-emacs-langs)

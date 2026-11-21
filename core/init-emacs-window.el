@@ -164,4 +164,4 @@
   (setq zoom-minibuffer-preserve-layout nil
         zoom-ignored-major-modes '(ediff-mode vundo-mode minibuffer-mode speedbar-mode)))
 
-(provide 'init-window)
+(provide 'init-emacs-window)

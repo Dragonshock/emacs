@@ -543,4 +543,4 @@ Pi treats the text before the first slash as the provider, so
         gptel-copilot-backend (gptel-make-openai-oauth "OpenAI OAuth Inline"
                                 :request-params '(:reasoning (:effort "low")))))
 
-(provide 'init-ai)
+(provide 'init-emacs-ai)

@@ -83,4 +83,4 @@
   :config
   (setq mermaid-output-format ".svg"))
 
-(provide 'init-writing)
+(provide 'init-emacs-writing)

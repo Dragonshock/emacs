@@ -179,4 +179,4 @@ home-manager path that the symlink points at still has both."
     :config
     (+mu4e-apply))))
 
-(provide 'init-mail)
+(provide 'init-emacs-mail)

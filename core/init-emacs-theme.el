@@ -1,5 +1,5 @@
 ;;; -*- lexical-binding: t -*-
-;; Declared here, not in init-ui: `init.el' requires init-theme before init-ui and
+;; Declared here, not in init-emacs-ui: `init.el' requires init-emacs-theme before init-emacs-ui and
 ;; +load-theme runs immediately below (tty-setup-hook with
 ;; :unless-daemonp-call-immediately). The declaration is what puts
 ;; straight/build/ashen on `custom-theme-load-path' and `load-path', so it must
@@ -53,4 +53,4 @@
       (with-selected-frame frame
         (+load-theme)))))
 
-(provide 'init-theme)
+(provide 'init-emacs-theme)

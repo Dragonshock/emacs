@@ -90,4 +90,4 @@ This command does the inverse of `fill-region'."
               scroll-down-aggressively nil
               auto-window-vscroll t))
 
-(provide 'init-util)
+(provide 'init-emacs-util)

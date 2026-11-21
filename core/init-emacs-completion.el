@@ -290,4 +290,4 @@
   :config
   (setq dabbrev-ignored-buffer-regexps '("\\.\\(?:pdf\\|jpe?g\\|png\\)\\'")))
 
-(provide 'init-completion)
+(provide 'init-emacs-completion)

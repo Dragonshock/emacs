@@ -706,4 +706,4 @@ text properties are invalid."
   :config
   (setq xwidget-webkit-buffer-name-format "*XWidget: %T*"))
 
-(provide 'init-web)
+(provide 'init-emacs-web)

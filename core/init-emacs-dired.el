@@ -120,4 +120,4 @@
         dired-preview-max-size (* (expt 2 20) 10)
         dired-preview-delay 0.5))
 
-(provide 'init-dired)
+(provide 'init-emacs-dired)

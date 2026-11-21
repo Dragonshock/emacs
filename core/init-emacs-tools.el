@@ -19,4 +19,4 @@
                                      ,(concat "PKG_CONFIG_PATH="
                                               (expand-file-name "~/.local/state/home-manager/gcroots/current-home/home-path/lib/pkgconfig")))))
 
-(provide 'init-tools)
+(provide 'init-emacs-tools)

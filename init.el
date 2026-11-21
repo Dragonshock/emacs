@@ -8,32 +8,32 @@
 
 ;; Each entry maps to one `core/init-*.el', tangled from `emacs-config.org'.
 ;; The order IS the dependency order:
-;;   init-util  first: every other module uses its `add-hook!' / `defadvice!'
-;;   init-theme before init-platform: the platform files call
+;;   init-emacs-util  first: every other module uses its `add-hook!' / `defadvice!'
+;;   init-emacs-theme before init-emacs-platform: the platform files call
 ;;              `+system-appearance-changed' at load time.
 
 (add-to-list 'load-path (expand-file-name "core" user-emacs-directory))
 
-(require 'init-util)
-(require 'init-straight)
-(require 'init-core)
-(require 'init-theme)
-(require 'init-ui)
-(require 'init-platform)
-(require 'init-highlight)
-(require 'init-modeline)
-(require 'init-completion)
-(require 'init-search)
-(require 'init-edit)
-(require 'init-window)
-(require 'init-dired)
-(require 'init-prog)
-(require 'init-langs)
-(require 'init-writing)
-(require 'init-org)
-(require 'init-agenda)
-(require 'init-vcs)
-(require 'init-tools)
-(require 'init-mail)
-(require 'init-web)
-(require 'init-ai)
+(require 'init-emacs-util)
+(require 'init-emacs-straight)
+(require 'init-emacs-core)
+(require 'init-emacs-theme)
+(require 'init-emacs-ui)
+(require 'init-emacs-platform)
+(require 'init-emacs-highlight)
+(require 'init-emacs-modeline)
+(require 'init-emacs-completion)
+(require 'init-emacs-search)
+(require 'init-emacs-edit)
+(require 'init-emacs-window)
+(require 'init-emacs-dired)
+(require 'init-emacs-prog)
+(require 'init-emacs-langs)
+(require 'init-emacs-writing)
+(require 'init-emacs-org)
+(require 'init-emacs-agenda)
+(require 'init-emacs-vcs)
+(require 'init-emacs-tools)
+(require 'init-emacs-mail)
+(require 'init-emacs-web)
+(require 'init-emacs-ai)

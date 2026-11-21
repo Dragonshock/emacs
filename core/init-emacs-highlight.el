@@ -166,4 +166,4 @@
       (add-hook! before-save-hook :local #'+highlight-changes-mode-turn-off)))
   :hook ((prog-mode conf-mode text-mode) . +highlight-changes-auto))
 
-(provide 'init-highlight)
+(provide 'init-emacs-highlight)

@@ -48,4 +48,4 @@
   :straight (:host github :repo "alberti42/straight-overview")
   :commands (straight-overview))
 
-(provide 'init-straight)
+(provide 'init-emacs-straight)

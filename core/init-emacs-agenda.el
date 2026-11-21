@@ -361,4 +361,4 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
   (setq org-pomodoro-length 30
         org-pomodoro-long-break-length 15))
 
-(provide 'init-agenda)
+(provide 'init-emacs-agenda)

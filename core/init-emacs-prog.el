@@ -452,4 +452,4 @@ separate argument, although the command accepts only one."
         (switch-to-buffer log-buffer-name)
         (select-window current-window)))))
 
-(provide 'init-prog)
+(provide 'init-emacs-prog)

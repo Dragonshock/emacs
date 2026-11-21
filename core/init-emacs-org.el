@@ -254,4 +254,4 @@
         org-typst-preview-image-directory
         (no-littering-expand-var-file-name "org/typst/")))
 
-(provide 'init-org)
+(provide 'init-emacs-org)

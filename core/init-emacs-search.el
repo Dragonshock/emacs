@@ -52,4 +52,4 @@
   ("C-, j" . link-hint-open-link)
   ("C-, c" . link-hint-copy-link))
 
-(provide 'init-search)
+(provide 'init-emacs-search)

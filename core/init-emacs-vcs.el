@@ -233,4 +233,4 @@
   :after magit
   :hook (magit-diff-visit-file . abridge-diff-mode))
 
-(provide 'init-vcs)
+(provide 'init-emacs-vcs)

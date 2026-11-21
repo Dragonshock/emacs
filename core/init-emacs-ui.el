@@ -224,4 +224,4 @@
   :init
   (setq kitty-graphics-enable-video t))
 
-(provide 'init-ui)
+(provide 'init-emacs-ui)

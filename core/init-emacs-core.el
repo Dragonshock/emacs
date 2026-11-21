@@ -785,4 +785,4 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 (use-package pass
   :straight t)
 
-(provide 'init-core)
+(provide 'init-emacs-core)

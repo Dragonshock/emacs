@@ -162,4 +162,4 @@ left unchanged."
   :config
   (setq battery-mode-line-format " %b%p%% "))
 
-(provide 'init-modeline)
+(provide 'init-emacs-modeline)
