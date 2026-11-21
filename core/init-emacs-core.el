@@ -724,11 +724,40 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
                         'truncation
                         (make-glyph-code ?… 'shadow))
 
+;; Dispatcher: the ONLY tty-setup entry point for protocol-level terminal
+;; extras (kkp + kitty-graphics).  Branch decisions live in the prose
+;; above and in the research note (sections 6/7).
+(defun +tty-setup-features ()
+  "Enable terminal extras according to the attached terminal's TERM.
+Dispatch per frame `tty-type' (env TERM as fallback): kitty gets the
+full stack; ghostty keeps the keyboard protocol but gets no terminal
+graphics, because its graphics protocol subset plus video streaming
+cause redraw storms and tearing, and Emacs 31.1 has no synchronized
+output to hide either; anything else keeps the historical behaviour,
+since both packages gate themselves on terminal queries."
+  (pcase (or (frame-parameter nil 'tty-type)
+             (getenv "TERM"))
+    ;; kitty: both protocols' reference implementation; prior behaviour.
+    ("xterm-kitty"
+     (global-kkp-mode 1)
+     (kitty-graphics-setup))
+    ;; ghostty implements KKP, but its graphics protocol is a divergent
+    ;; subset and video streaming triggers per-frame redraw storms (H1);
+    ;; graphics stay off entirely on this branch.
+    ("xterm-ghostty"
+     (global-kkp-mode 1))
+    (_
+     ;; Anything else: kkp gates itself on the per-terminal CSI u query
+     ;; and stays inert without a reply; kitty-graphics self-disables
+     ;; when its probe finds no backend.  Old behaviour retained.
+     (global-kkp-mode 1)
+     (kitty-graphics-setup))))
+
 ;; [Kitty Keyboard Protocol] Implements support for Kitty's "keyboard protocol",
 ;; which allows the terminal to send key events to Emacs.
 (use-package kkp
   :straight t
-  :hook (tty-setup . global-kkp-mode)
+  :hook (tty-setup . +tty-setup-features)
   :init
   ;; Read when the mode turns on, so this has to precede it. KKP sends
   ;; C-g as CSI-u; without this, a blocking call-process cannot be quit.
@@ -786,5 +815,13 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 
 (use-package pass
   :straight t)
+
+;; [server] The terminal is only a VIEW: `emacsclient -t' attaches to
+;; this one long-lived instance instead of re-running init per terminal.
+;; No daemon: prot's reasons (crashed before; clearer lifecycle).
+(setq server-client-instructions nil)
+(require 'server)
+(unless (or (server-running-p) (daemonp))
+  (server-start))
 
 (provide 'init-emacs-core)

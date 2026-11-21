@@ -1945,20 +1945,77 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 ~C-<backspace>~ 与 ~C-h~ 可以被区分，也能表达更多组合键与 Hyper/Super；README 对比了 xterm 的
 ~modifyOtherKeys~，指出它覆盖的键更多，还能动态探测终端是否支持。
 
-~tty-setup~ 时打开 ~global-kkp-mode~，只在终端帧生效。~:init~ 里那句
-~kkp-restore-legacy-keys-around-subprocesses t~ 必须在模式打开之前设——注释写明理由：KKP 会把
-~C-g~ 发成 CSI-u，不设它就无法中断一个阻塞中的 ~call-process~。
+目前 ghostty 上报告的性能问题（帧内容突然崩、刷新时叠影/撕裂）集中在 tty 侧的全家桶上，所以终端里的
+两件协议级配置（本节的 kkp 与 ~init-emacs-ui~ 的 kitty-graphics）不再各自直接挂 ~tty-setup~，而是统一
+交给一个分流器 ~+tty-setup-features~：它是 tty 特性挂在 ~tty-setup-hook~ 上的唯一入口，按帧的
+~tty-type~（回退到环境变量 ~TERM~）分三个分支，决定见调研笔记第六/七节：
+
++ ~xterm-kitty~：KKP 与 kitty-graphics 全开——原行为不变，kitty 是这两个协议的正主。
++ ~xterm-ghostty~：KKP 开（ghostty 实现了 KKP），kitty-graphics 整体不装（不是只关视频）。理由：
+  ghostty 的 graphics protocol 实现相对 kitty 官方有子集/行为差异，而包的探测
+  ~kitty-graphics--kitty-detect~ 会把 ~GHOSTTY_RESOURCES_DIR~ / ~GHOSTTY_BIN_DIR~ /
+  ~TERM_PROGRAM=ghostty~ 认作支持，模式在 ghostty 上会真激活而不是自禁；叠加上本配置的
+  ~kitty-graphics-enable-video t~，逐帧流式传输带来的重绘风暴正是调研的首要嫌疑（H1）。而
+  Emacs 31.1 的 =term/xterm.el= 没有实现 Synchronized Output（H4，grep 实证，要等 32），撕裂
+  无法靠终端同步掩盖，只能靠不在 ghostty 上流式传输图形来根治。
++ 其它 TERM：维持老行为。KKP 照开是安全的——kkp 逐终端发 ~CSI ?<flags>u~ 查询
+  （~kkp-enable-in-terminal~），应答不匹配 ~kkp--terminal-setup~ 的模式就放弃、按提示等下一次焦点
+  切换重试，~kkp-with-legacy-keys~ 在 KKP 未激活的终端上是 no-op，对不支持 KKP 的终端零副作用；
+  kitty-graphics 照调 ~kitty-graphics-setup~，它的全局模式在 ~kitty-graphics--detect-protocol~
+  探测失败时会自禁并说明原因，同样不用我们替它猜终端。
+
+两个包的 ~use-package~ 声明原样保留（配方与 ~:init~ 变量都在），只把「何时开」从各自的 ~:hook~ 收归
+到分流器：kitty-graphics 一节的 ~:hook~ 同步撤掉，由这里的 kitty 分支跨模块调用。跨模块是安全的——
+~kitty-graphics-setup~ 本来就是 autoload，而 ~tty-setup-hook~ 只在终端帧初始化时才运行，那时所有
+模块早已加载完毕，不存在加载顺序问题。
+
+分流器内部先开 KKP 再调 ~kitty-graphics-setup~：后者的探测用 ~read-event~ 读终端应答，会吃掉别的
+tty-setup 消费者还在等的回包（它自己的注记引 issue #33，所以主动推迟到 idle timer）；先让 kkp 的异步
+查询上手，是同一条教训的正向应用。鼠标（~xterm-mouse-mode~）、编码系统与折行/截断 glyph 不进分流
+器、保持无条件：它们没有协议探测的副作用，风险低。
+
+~:init~ 里那句 ~kkp-restore-legacy-keys-around-subprocesses t~ 必须在模式打开之前设——注释写明理
+由：KKP 会把 ~C-g~ 发成 CSI-u，不设它就无法中断一个阻塞中的 ~call-process~。
 
 + 包名（MELPA）：~kkp~
 + Git 仓库：
   - GitHub：<https://github.com/benotn/kkp>
 
 #+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
+;; Dispatcher: the ONLY tty-setup entry point for protocol-level terminal
+;; extras (kkp + kitty-graphics).  Branch decisions live in the prose
+;; above and in the research note (sections 6/7).
+(defun +tty-setup-features ()
+  "Enable terminal extras according to the attached terminal's TERM.
+Dispatch per frame `tty-type' (env TERM as fallback): kitty gets the
+full stack; ghostty keeps the keyboard protocol but gets no terminal
+graphics, because its graphics protocol subset plus video streaming
+cause redraw storms and tearing, and Emacs 31.1 has no synchronized
+output to hide either; anything else keeps the historical behaviour,
+since both packages gate themselves on terminal queries."
+  (pcase (or (frame-parameter nil 'tty-type)
+             (getenv "TERM"))
+    ;; kitty: both protocols' reference implementation; prior behaviour.
+    ("xterm-kitty"
+     (global-kkp-mode 1)
+     (kitty-graphics-setup))
+    ;; ghostty implements KKP, but its graphics protocol is a divergent
+    ;; subset and video streaming triggers per-frame redraw storms (H1);
+    ;; graphics stay off entirely on this branch.
+    ("xterm-ghostty"
+     (global-kkp-mode 1))
+    (_
+     ;; Anything else: kkp gates itself on the per-terminal CSI u query
+     ;; and stays inert without a reply; kitty-graphics self-disables
+     ;; when its probe finds no backend.  Old behaviour retained.
+     (global-kkp-mode 1)
+     (kitty-graphics-setup))))
+
 ;; [Kitty Keyboard Protocol] Implements support for Kitty's "keyboard protocol",
 ;; which allows the terminal to send key events to Emacs.
 (use-package kkp
   :straight t
-  :hook (tty-setup . global-kkp-mode)
+  :hook (tty-setup . +tty-setup-features)
   :init
   ;; Read when the mode turns on, so this has to precede it. KKP sends
   ;; C-g as CSI-u; without this, a blocking call-process cannot be quit.
@@ -2079,6 +2136,37 @@ Timer Must Run"。
 
 (use-package pass
   :straight t)
+#+end_src
+
+*** The =init-emacs-core.el= section for the ~server~
+
+终端不是第二个 Emacs。这一节把使用形态钉死：ghostty 里跑的从来不是另一个完整 init 的 ~emacs -nw~，而是
+~emacsclient -t~ 挂到常驻实例上的一帧——终端只是视图，事实数据只在长命的实例里初始化一次。
+~emacsclient -e~ / ~-t~ 是外部调用它的两只手（fish 侧的 ~ect~ 已配好）。
+
+这段架构照搬自 prot（见调研引文）：常驻的是普通 Emacs 而不是 daemon。理由照抄：daemon 崩过——
+「只要某次 Lisp 求值出错，Emacs 就崩」，一崩全部 client 陪着殉葬；而 server 的生命周期清晰——它就是普通
+Emacs 本体，关掉最后一个帧自然退出，出问题重启的也是一个普通 Emacs。附带收益：telega、Rime 这类带
+进程锁的包（librime 的状态库、TG 会话锁）在「一个实例多帧」的模型里只初始化一次，~emacsclient -t~
+开出的终端帧不再重复初始化、更不会和新帧抢锁。
+
+不选 ~noninteractive~ 守卫，保持 prot 原样：batch 模式下 ~server-start~ 同样能工作（socket 目录
+~$TMPDIR/emacs<uid>~ 按需创建，退出时清理）。~server-client-instructions nil~ 在 global defaults
+里已经设过一次，这里随 prot 原块整段照搬、再设一次无害。~server-running-p~ 保证已有 socket 不重入
+（别的实例先起了就不重入）；~daemonp~ 时跳过——daemon 自己就是 server。
+
++ 包名（Emacs 内置）：~server~
++ Git 仓库：
+  - GitHub：<https://github.com/emacs-mirror/emacs>（源码随 Emacs 自带）
+
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
+;; [server] The terminal is only a VIEW: `emacsclient -t' attaches to
+;; this one long-lived instance instead of re-running init per terminal.
+;; No daemon: prot's reasons (crashed before; clearer lifecycle).
+(setq server-client-instructions nil)
+(require 'server)
+(unless (or (server-running-p) (daemonp))
+  (server-start))
 #+end_src
 
 *** The =init-emacs-core.el= section to provide the feature
@@ -2945,9 +3033,19 @@ MonoLisaCode，实际字体是 PragmataPro Liga，表没动）。Org 必须排�
 （mpv）、按字号渲染 Org 标题、给 doc-view 画 PDF。README 说后端在启动时自动选择，所以同一份配置在
 kitty、wezterm、foot 以及 tmux 里都成立。
 
-本配置挂 ~tty-setup~ 调 ~kitty-graphics-setup~，并在 ~:init~ 里打开视频（默认为 nil）。挂 hook 而
-不是直接调用，是因为那个函数本身就是「注册一个到第一个终端帧才开模式」的入口：daemon 启动时没有终
-端，全局模式在那里判断不了能力，它同时兼容 daemon、GUI server 与 ~emacs -nw~ 三种情形。
+启用入口已收归 ~init-emacs-core~ 里的分流器 ~+tty-setup-features~（见 kkp 一节的分支决定）：不再直接挂
+~tty-setup~ 调 ~kitty-graphics-setup~，只保留包声明与 ~:init~ 变量。分流结果：TERM ~xterm-kitty~ 上照旧
+调 ~kitty-graphics-setup~（视频也照开）；~xterm-ghostty~ 上完全不调——ghostty 的 graphics protocol
+实现是 kitty 官方的子集，与包的上游假设有行为差异，叠加 ~kitty-graphics-enable-video t~ 的逐帧流
+式传输后，重绘风暴正是 ghostty 上叠影/撕裂的首要嫌疑（调研 H1）；而 Emacs 31.1 尚无 Synchronized
+Output（H4），撕裂不能靠终端同步掩盖，只能不在 ghostty 上流式传输图形。其它 TERM 上照调，全局模式在
+~kitty-graphics--detect-protocol~ 探测失败时会自禁。ghostty 分支里视频开关没有意义，因为整个入口都不
+调——关的是 graphics 而不只是 video（这是分流决定里刻意强调的）。
+
+~kitty-graphics-setup~ 这个函数本身仍是跨模块（init-emacs-core → init-emacs-ui）调用的合适入口：它
+同时兼容 daemon、GUI server 与 ~emacs -nw~ 三种情形——daemon 启动时没有终端，全局模式在那里判断不了
+能力，所以它只是注册一个到第一个终端帧才开模式的 hook，并只在已是终端时立即开。分流器只在这种入口
+的上面加一层 TERM 白名单，不改变函数自身的用途。
 
 + 包名（GitHub cashmeredev/kitty-graphics.el）：~kitty-graphics~
 + Git 仓库：
@@ -2956,9 +3054,12 @@ kitty、wezterm、foot 以及 tmux 里都成立。
 #+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; [Kitty Graphics Protocol] Implements support for Kitty's "graphics protocol",
 ;; which allows the terminal to display images and videos inline.
+;; Enabled (only) by `+tty-setup-features' in init-emacs-core: kitty TERM yes,
+;; ghostty TERM no (protocol subset + video redraw storms, research H1).
 (use-package kitty-graphics
   :straight (:type git :host github :repo "cashmeredev/kitty-graphics.el")
-  :hook (tty-setup . kitty-graphics-setup)
+  ;; Video streaming stays on for kitty; the ghostty branch never calls
+  ;; kitty-graphics-setup, so video (and all graphics) never start there.
   :init
   (setq kitty-graphics-enable-video t))
 #+end_src
