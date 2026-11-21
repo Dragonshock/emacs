@@ -138,37 +138,34 @@ straight 的引导写在 `init-emacs-straight`，它必须早于任何 `:straigh
 * The early initialisation of Emacs (=early-init.el=)
 
 这是 Emacs 启动时读的第一个文件，运行在任何包与 frame 之前，所以只能做不依赖包、不依赖窗口尺寸的
-准备。它同时是本文件 tangle 出来的（`:tangle early-init.el`），改它要改下面这一节，不要直接改文件。
+准备。它同时是本文件 tangle 出来的（`:tangle early-init.el`），改它要改下面这些节，不要直接改文件。
 
-** 启动期 GC 与静默
+** 与 prot-emacs.org 的 early-init 有何不同
+
+prot 的 `early-init.el` 长在多桌面环境（bspwm/i3/GNOME）与两种 Emacs 构建（GTK / PGTK）上，所以
+有一半篇幅在处理「这是不是笔记本」「是不是 Wayland」这类分支，还用 `user-lisp-directory` 让
+`prot-lisp/` 像包一样被编译。这些都不适合本配置：单机 macOS + Linux、构建固定、自定义代码在
+`core/` 里用 `require` 加载，不需要再引入一个库目录。
+
+真正值得借鉴、并已采纳的有四项：
+
+- `inhibit-startup-echo-area-message` 要设成 `user-login-name`。文档写的是「与用户名相等」才生效，
+  设成 `t` 并不会抑制 echo area 里的启动信息。
+- 给默认 frame 命名（`set-frame-name "home"`），这样才能用 `select-frame-by-name` 或窗口管理器
+  按名字选 frame。
+- 启动期清空 `vc-handled-backends`。每次打开文件都会问「这个文件归哪个后端管」，启动阶段没必要。
+  本配置在 `init-emacs-vcs` 里最终把它收敛到 `'(Git)`。
+- `frame-inhibit-implied-resize` 用 `'force` 而不是 `t`：前者连「用户显式改字号」也不许隐式
+  缩放 frame。
+
+没有采纳的：`user-lisp-directory`（见上）、按设备类型切换 frame 尺寸（单机）、`undecorated`
+（GTK 专属，macOS 不适用）。
+
+** 启动期 GC
 
 启动头几秒把 `gc-cons-threshold` 抬到 `most-positive-fixnum`、`gc-cons-percentage` 抬到 1.0，
 避免在加载模块时反复 GC；`emacs-startup-hook` 里再挂一个 idle 1 秒的定时器，把两者降回
 32 MiB / 0.2。用 idle 定时器而不是直接 `setq`，是为了不让第一次 GC 卡住首帧。
-
-同一段里把 `ad-redefinition-action` 设为 `accept`，并让 native-comp 的告警只在 `init-file-debug`
-时出现——启动期看到的告警应当是真问题，不是这几类预期内的噪音。
-
-** 帧参数与启动画面
-
-`frame-inhibit-implied-resize` 关掉隐式缩放；`inhibit-startup-screen` 一族与两条
-`display-startup-*` 的 `:override` advice 一起，确保没有启动屏、没有 echo area 提示。
-`inhibit-redisplay` 与 `inhibit-message` 在 `window-setup-hook` 之前为 t，之后恢复并
-`redraw-frame`（daemon 下跳过）——这一段专治深色环境下启动时的白闪。
-
-`default-frame-alist` 里把 tab-bar、menu-bar、tool-bar、滚动条全部预先压成 0，配合
-`menu-bar-mode` / `tool-bar-mode` / `scroll-bar-mode` 的 `nil`，避免用户在启动后要关两次。
-tab bar 由 `init-emacs-modeline` 稍后再打开，绕开 PGTK 下 echo area 被裁的问题。
-
-** 文件加载优化
-
-`file-name-handler-alist` 在启动期间被清空、在 `emacs-startup-hook` 里恢复（用
-`command-line-1` 的 `:around` advice 控制时机）——每次 `require` / `load` 都会查这张表，
-清空后启动更快。`load-suffixes` 与 `load-file-rep-suffixes` 也被裁剪，`before-init-hook` 里
-再按平台补回 `.dylib` / `.so` / `.dll`。
-
-`load-prefer-newer` 在 `noninteractive`（batch）时为 t，这样批处理脚本会读到比 `.elc` 更新的源文件。
-`read-process-output-max` 抬到 4 MiB，主要给 LSP 用。
 
 #+begin_src emacs-lisp :tangle early-init.el
 ;;; -*- lexical-binding: t -*-
@@ -185,7 +182,16 @@ tab bar 由 `init-emacs-modeline` 稍后再打开，绕开 PGTK 下 echo area �
                      (setq gc-cons-threshold (* 32 1024 1024)
                            gc-cons-percentage 0.2))))
           100)
+#+end_src
 
+** 启动静默与告警抑制
+
+`ad-redefinition-action 'accept` 让重复定义函数不报错；`jka-compr-verbose` 与两条 native-comp
+告警只在 `init-file-debug` 时为真——启动期看到的告警应当是真问题，不是这几类预期内的噪音。
+`warning-suppress-types` 过滤 `defvaralias` 与 `lexical-binding`，`warning-inhibit-types`
+再压掉「缺 lexical-binding cookie」这一类。
+
+#+begin_src emacs-lisp :tangle early-init.el
 ;; Keep early startup quiet unless we're debugging init.
 (setq ad-redefinition-action 'accept
       jka-compr-verbose init-file-debug
@@ -194,59 +200,26 @@ tab bar 由 `init-emacs-modeline` 稍后再打开，绕开 PGTK 下 echo area �
       native-comp-async-on-battery-power nil
       warning-suppress-types '((defvaralias) (lexical-binding))
       warning-inhibit-types '((files missing-lexbind-cookie)))
+#+end_src
 
+** 进程、加载与命令行
+
+`read-process-output-max` 抬到 4 MiB，主要给 LSP 用（默认 4 KiB 会让 JSON-RPC 的读取次数急剧
+上升）。`load-prefer-newer` 在 batch（`noninteractive`）时为 t，这样脚本会读到比 `.elc` 更新的源
+文件，而不是被旧字节码骗过去。
+
+`auto-mode-case-fold` 关掉，省掉每个文件名的两次大小写匹配。`command-line-*-option-alist` 按
+frame 类型清空——在 macOS 上不需要解析 X11 的选项表，反过来也一样。
+
+`setopt--set` 的 `:around` advice 把 `custom-load-recursion` 打开，防止 `setopt` 在 init 期间
+为了类型检查提前加载 `custom` 依赖。
+
+#+begin_src emacs-lisp :tangle early-init.el
 ;; Larger process output buffer (mainly for LSP).
 (setq read-process-output-max (* 4 1024 1024))
 
 ;; Batch jobs should pick up source files newer than their byte-code.
 (setq load-prefer-newer noninteractive)
-
-;; Inhibit resizing frame
-(setq frame-inhibit-implied-resize t)
-
-;; Inhibit startup screen & message
-(setq inhibit-startup-screen t
-      inhibit-startup-echo-area-message t
-      inhibit-startup-buffer-menu t
-      inhibit-x-resources t
-      inhibit-default-init t
-      initial-scratch-message nil
-      initial-major-mode 'fundamental-mode)
-(advice-add #'display-startup-echo-area-message :override #'ignore)
-(advice-add #'display-startup-screen :override #'ignore)
-
-;; Suppress flashing at startup
-(setq-default inhibit-redisplay t
-              inhibit-message t)
-(add-hook 'window-setup-hook
-          (lambda ()
-            (setq-default inhibit-redisplay nil
-                          inhibit-message nil)
-            (unless (daemonp)
-              (redraw-frame))))
-
-;; Inhibit package.el initialization
-(setq package-enable-at-startup nil)
-
-;; Faster to disable these here (before initialized)
-;; init-modeline enables the tab bar later to avoid clipping PGTK's echo area.
-(push '(tab-bar-lines . 0) default-frame-alist)
-(push '(menu-bar-lines . 0) default-frame-alist)
-(push '(tool-bar-lines . 0) default-frame-alist)
-(push '(vertical-scroll-bars) default-frame-alist)
-(push '(internal-border-width . 0) default-frame-alist)
-(when (featurep 'ns)
-  (push '(ns-transparent-titlebar . t) default-frame-alist))
-;; Set these to nil so users don't have to toggle the modes twice to reactivate.
-(setq menu-bar-mode nil
-      tool-bar-mode nil
-      scroll-bar-mode nil
-      tab-bar-mode nil)
-
-;; Avoid toolbar setup work during startup. It is unnecessary while the toolbar is
-;; disabled, and can be reconstructed if `tool-bar-mode' is enabled later.
-(when (fboundp 'tool-bar-setup)
-  (advice-add #'tool-bar-setup :override #'ignore))
 
 ;; Case-insensitive pass over `auto-mode-alist' is time wasted.
 (setq auto-mode-case-fold nil)
@@ -263,8 +236,21 @@ tab bar 由 `init-emacs-modeline` 稍后再打开，绕开 PGTK 下 echo area �
   (define-advice setopt--set (:around (fn &rest args) inhibit-load-symbol -90)
     (let ((custom-load-recursion t))
       (apply fn args))))
+#+end_src
 
-;; `file-name-handler-alist' is consulted on each call to `require', `load', or various file/io functions
+** 文件句柄与后缀
+
+`file-name-handler-alist` 在启动期间被清空、在 `emacs-startup-hook` 里恢复（用 `command-line-1`
+的 `:around` advice 控制时机）——每次 `require` / `load` 都会查这张表，清空后启动更快。这里保留
+了旧值并在恢复时 `delete-dups`，避免重复条目累积。
+
+同一节里把 `vc-handled-backends` 先置 nil（VC 后端探测留到 `init-emacs-vcs`），再把
+`load-suffixes` 与 `load-file-rep-suffixes` 裁剪到最小；`before-init-hook` 里按平台补回
+`.dylib` / `.so` / `.dll`，否则动态模块加载会失败。
+
+#+begin_src emacs-lisp :tangle early-init.el
+;; `file-name-handler-alist' is consulted on each call to `require', `load', or
+;; various file/io functions.  Clear it while starting, restore afterwards.
 (unless (or (daemonp) noninteractive init-file-debug)
   (let ((old-value (default-toplevel-value 'file-name-handler-alist)))
     (put 'file-name-handler-alist 'initial-value (copy-sequence old-value))
@@ -282,6 +268,10 @@ tab bar 由 `init-emacs-modeline` 稍后再打开，绕开 PGTK 下 echo area �
                           old-value))))
               101)))
 
+;; Skip VC backend detection until init-emacs-vcs has decided which backends to
+;; keep; probing every backend on each file is wasted work during startup.
+(setq vc-handled-backends nil)
+
 ;; optimize `load-suffixes'
 (setq load-suffixes '(".elc" ".el")
       load-file-rep-suffixes '(""))
@@ -295,13 +285,89 @@ tab bar 由 `init-emacs-modeline` 稍后再打开，绕开 PGTK 下 echo area �
                                (t nil)))))
 
 (add-hook 'before-init-hook #'+restore-load-suffixes-h 100)
+#+end_src
 
-;; Site files will use `load-file', which emit messages and triggers redisplay
-;; Make it silent and undo advice later
-(define-advice load-file (:override (file) silence)
-  (load file nil 'nomessage))
-(define-advice startup--load-user-init-file (:after (&rest _) undo-silence)
-  (advice-remove #'load-file #'load-file@silence))
+** 帧与工具栏
+
+`frame-inhibit-implied-resize 'force` 关掉隐式缩放；`default-frame-alist` 里把 tab-bar、menu-bar、
+tool-bar、滚动条全部预先压成 0，配合 `menu-bar-mode` / `tool-bar-mode` / `scroll-bar-mode` 的
+`nil`，避免用户在启动后要关两次。tab bar 由 `init-emacs-modeline` 稍后再打开，绕开 PGTK 下
+echo area 被裁的问题。
+
+`tool-bar-setup` 的 `:override` advice 省掉工具栏初始化的工作——工具栏关着的时候那些工作全是白做。
+最后给 frame 起名 `home`，让 `select-frame-by-name` 和窗口管理器都能按名字找到它。
+
+#+begin_src emacs-lisp :tangle early-init.el
+;; Inhibit implicit frame resizing (font changes must not resize the frame).
+(setq frame-inhibit-implied-resize 'force)
+
+;; Disable these before the first frame is drawn, so users do not have to
+;; toggle the modes twice.  init-modeline enables the tab bar later to avoid
+;; clipping the PGTK echo area.
+(push '(tab-bar-lines . 0) default-frame-alist)
+(push '(menu-bar-lines . 0) default-frame-alist)
+(push '(tool-bar-lines . 0) default-frame-alist)
+(push '(vertical-scroll-bars) default-frame-alist)
+(push '(internal-border-width . 0) default-frame-alist)
+(when (featurep 'ns)
+  (push '(ns-transparent-titlebar . t) default-frame-alist))
+(setq menu-bar-mode nil
+      tool-bar-mode nil
+      scroll-bar-mode nil
+      tab-bar-mode nil)
+
+;; Avoid toolbar setup work during startup. It is unnecessary while the toolbar
+;; is disabled, and can be reconstructed if `tool-bar-mode' is enabled later.
+(when (fboundp 'tool-bar-setup)
+  (advice-add #'tool-bar-setup :override #'ignore))
+
+;; Name the frame so it can be picked by name (select-frame-by-name, window
+;; manager switchers, and per-frame buffer grouping).
+(add-hook 'after-init-hook (lambda () (set-frame-name "home")))
+#+end_src
+
+** 启动画面与白闪
+
+`inhibit-startup-screen` 一族与两条 `display-startup-*` 的 `:override` advice 一起，确保没有启动
+屏、没有 echo area 提示。`inhibit-redisplay` 与 `inhibit-message` 在 `window-setup-hook` 之前为
+t，之后恢复并 `redraw-frame`（daemon 下跳过）——这一段专治深色环境下启动时的白闪。
+
+和 prot 的做法不同：他在 early-init 里就把 `default` face 的背景设成黑色来避免白闪，我们选择
+「先不重绘、等首帧前再恢复」。两种都能消除闪烁，后者不需要在 early-init 里判断明暗主题，代价是
+首帧出来得稍晚一点。
+
+#+begin_src emacs-lisp :tangle early-init.el
+;; Inhibit startup screen & message.  `inhibit-startup-echo-area-message' only
+;; works when it equals the user name, not when it is merely non-nil.
+(setq inhibit-startup-screen t
+      inhibit-startup-echo-area-message user-login-name
+      inhibit-startup-buffer-menu t
+      inhibit-x-resources t
+      inhibit-default-init t
+      initial-scratch-message nil
+      initial-major-mode 'fundamental-mode)
+(advice-add #'display-startup-echo-area-message :override #'ignore)
+(advice-add #'display-startup-screen :override #'ignore)
+
+;; Suppress flashing at startup
+(setq-default inhibit-redisplay t
+              inhibit-message t)
+(add-hook 'window-setup-hook
+          (lambda ()
+            (setq-default inhibit-redisplay nil
+                          inhibit-message nil)
+            (unless (daemonp)
+              (redraw-frame))))
+#+end_src
+
+** 包系统
+
+`package-enable-at-startup` 设为 nil：包全部由 straight 管理，不需要 `package.el` 在启动时扫描
+`elpa/`。这一条与 prot 相反——他用 `package.el`，所以显式设为 t 来利用包缓存。
+
+#+begin_src emacs-lisp :tangle early-init.el
+;; Inhibit package.el initialization: straight owns the packages.
+(setq package-enable-at-startup nil)
 #+end_src
 
 * The main initialisation of Emacs (=init.el=)
