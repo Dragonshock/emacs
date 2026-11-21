@@ -366,7 +366,8 @@
   :straight t
   :unless noninteractive
   :init
-  (setq exec-path-from-shell-shell-name "/etc/profiles/per-user/dragon/bin/fish"
+  (setq exec-path-from-shell-shell-name
+        (or (executable-find "fish") (getenv "SHELL") shell-file-name)
         exec-path-from-shell-arguments nil
         exec-path-from-shell-variables
         '("PATH" "MANPATH" "PKG_CONFIG_PATH"

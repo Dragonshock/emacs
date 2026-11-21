@@ -489,8 +489,10 @@ Pi treats the text before the first slash as the provider, so
          ("C-c g u" . agent-recall-resume))
   :init
   (setq agent-recall-search-paths
-        (mapcar #'expand-file-name
-                '("~/.config/emacs" "~/src" "~/.config" "~/.config/emacs/var/agent-shell"))
+        (list user-emacs-directory
+              (expand-file-name "src" "~")
+              (expand-file-name "~/.config")
+              (expand-file-name "var/agent-shell" user-emacs-directory))
         agent-recall-max-depth 3
         agent-recall-search-function 'consult-ripgrep
         agent-recall-browse-sort 'modified-desc

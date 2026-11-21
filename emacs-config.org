@@ -126,6 +126,27 @@ straight 的引导写在 ~init-emacs-straight~，它必须早于任何 ~:straigh
 直接走 XDG 路径。配置同时支持 daemon 与普通启动：~use-package-always-demand~ 在 daemon 下为 ~t~
 （所有包立即加载），普通启动下模块延迟加载，由 ~once~ 在空闲时增量推进。
 
+** 从零安装
+
+这份配置的移植方式和 prot-emacs.org 一样：clone 下来，tangle 一次，然后启动。
+
+1. 把仓库放在 =~/.config/emacs=（或任意目录，启动时用 =--init-directory= 指过去）。
+2. 先 tangle 出 =early-init.el=、=init.el= 与 =core/=：
+
+   #+begin_example sh
+   cd ~/.config/emacs
+   emacs -Q --batch --eval '(progn (require (quote ob-tangle)) \
+     (setq org-confirm-babel-evaluate nil) \
+     (org-babel-tangle-file "emacs-config.org"))'
+   #+end_example
+
+   所有 =core/= 块都带 =:mkdirp yes=，所以目标目录不存在时会自动创建。
+3. 启动 Emacs。straight 会 clone 并编译约 150 个包，首次需要联网，之后走本地缓存。
+4. 可选：写 =private.el=（邮件地址等身份信息）。缺失时相关模块只是跳过，不会报错。
+
+已验证：空目录里只放 =emacs-config.org=，tangle 后能生成全部文件并正常加载，不依赖
+=private.el=、=etc/= 或 =scripts/=。
+
 ** Conventions
 
 - 配置私有的符号用 ~+~ 前缀（~+load-theme~、~+elfeed-display-entry~、~+mu4e-apply~），与上游包的
@@ -506,7 +527,7 @@ t，之后恢复并 ~redraw-frame~（daemon 下跳过）——这一段专治深
 性的：daemon 启动时没有图形帧，主题以及一切与帧相关的初始化必须推迟到第一次真正建帧，那里用的都
 是后者。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-util.el
+#+begin_src emacs-lisp :tangle core/init-emacs-util.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; Thanks to DOOM Emacs
@@ -575,7 +596,7 @@ This macro accepts, in order:
 后文大量出现的 ~:override~ 基本上都是同一个用途——上游有 bug 或与本配置的假设冲突，就地整段替换，
 而不 fork。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-util.el
+#+begin_src emacs-lisp :tangle core/init-emacs-util.el :mkdirp yes
 (defmacro defadvice! (symbol arglist &rest body)
   "Define an advice called SYMBOL and add it to PLACES.
 
@@ -603,7 +624,7 @@ DOCSTRING and BODY are as in `defun'.
 是这一节唯一被别人调用的函数。~+unfill-region~ 是 ~fill-region~ 的反操作，把换行还原成空格；全文
 目前只有定义、没有调用点，它属于「迟早要用」的小工具，不要以为它已经在生效。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-util.el
+#+begin_src emacs-lisp :tangle core/init-emacs-util.el :mkdirp yes
 (defun +unfill-region (start end)
   "Replace newline chars in region from START to END by single spaces.
 This command does the inverse of `fill-region'."
@@ -625,7 +646,7 @@ This command does the inverse of `fill-region'."
 ~provide~ 把 ~init-emacs-util~ 登记成一个 feature，=init.el= 里那条 ~require~ 找的就是这个名字。每个模
 块的最后一块都只做这一件事，所以它总是一个只有一行的块。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-util.el
+#+begin_src emacs-lisp :tangle core/init-emacs-util.el :mkdirp yes
 (provide 'init-emacs-util)
 #+end_src
 
@@ -649,7 +670,7 @@ straight.el 自称「purely functional 的包管理器」：每个包的来源�
 引导本身是官方 =install.el= 的套路：=straight/repos/straight.el/bootstrap.el= 不存在时下载并求值
 安装脚本，存在时直接 ~load~，两种情况下都会把版本号 ~bootstrap-version~ 定成 7。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-straight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-straight.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; [straight] Package manager config (should put setq before installation for `straight`)
@@ -687,7 +708,7 @@ straight.el 自称「purely functional 的包管理器」：每个包的来源�
 ~use-package-always-demand~ 按 ~daemonp~ 二选一——daemon 下全部立即加载（反正只启动一次），普通会
 话下全部延迟，启动更快。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-straight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-straight.el :mkdirp yes
 ;; [use-package] config
 (setq use-package-always-demand (daemonp)
       use-package-always-defer (not (daemonp))
@@ -706,7 +727,7 @@ straight.el 自称「purely functional 的包管理器」：每个包的来源�
 ~:require-incrementally~，不必每个包都改写法。~:files~ 里多带的 =once-use-package/*.el= 就是那个
 关键字别名层。daemon 下不启用增量加载——那种会话只启动一次，没有「启动之后」可摊。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-straight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-straight.el :mkdirp yes
 ;; [once] Incremental loading
 (use-package once
   :straight (:host github :repo "emacs-magus/once"
@@ -731,7 +752,7 @@ straight.el 自称「purely functional 的包管理器」：每个包的来源�
 本配置只装不配：~:commands~ 一个入口，没有给它任何键位。它属于「偶尔 ~M-x~ 调用」的工具，所以延
 迟加载，不进启动路径。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-straight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-straight.el :mkdirp yes
 ;; [straight-overview]
 (use-package straight-overview
   :straight (:host github :repo "alberti42/straight-overview")
@@ -742,7 +763,7 @@ straight.el 自称「purely functional 的包管理器」：每个包的来源�
 
 ~provide~ 把 ~init-emacs-straight~ 登记成 feature，之后所有模块里出现的 ~:straight~ 才有意义。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-straight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-straight.el :mkdirp yes
 (provide 'init-emacs-straight)
 #+end_src
 
@@ -763,7 +784,7 @@ auto-save、elpa、ispell 个人词典、tramp-rpc 与 ghostel 的缓存目录�
 这里是有语义的——在它之前调用 ~no-littering-expand-var-file-name~ 只会报未定义。最后那句
 ~no-littering-theme-backups~ 把备份与 auto-save 也接进这条路径。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 (use-package no-littering
@@ -786,7 +807,7 @@ auto-save、elpa、ispell 个人词典、tramp-rpc 与 ghostel 的缓存目录�
 能影响还没创建的 buffer。~fill-column~ 也在这里定成 80，后面 ~display-fill-column-indicator~ 那
 一节才有意义。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 (setq-default
  ;; no client startup messages
  server-client-instructions nil
@@ -899,7 +920,7 @@ Emacs 把几个危险或容易被误触的命令标成 disabled，第一次调�
 ~put~ 改的是符号属性，所以调用顺序随意；~help-fns-edit-variable~ 例外——它所在的库还没加载，符号
 还没定义，只能包一层 ~with-eval-after-load~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; Enable [disabled cmds]
 ;; Enable the disabled narrow commands
 (put 'narrow-to-defun  'disabled nil)
@@ -923,7 +944,7 @@ Emacs 把几个危险或容易被误触的命令标成 disabled，第一次调�
 有 autosave 数据的文件被打开时，~after-find-file~ 会停一秒提示，这里用一条 ~:around~ advice 把
 ~sit-for~ 临时换成空函数。写成 advice 而不是改上游，是因为这只是本配置的偏好，不是上游的 bug。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [autosave]
 ;; TRICK: If a file has autosaved data, `after-find-file' will pause for 1 second to
 ;; tell about it, which is very annoying. Just disable it.
@@ -942,7 +963,7 @@ Emacs 把几个危险或容易被误触的命令标成 disabled，第一次调�
 tty 帧单独处理：编码系统是 per-frame 的，图形帧与终端帧可以共存，所以 ~+setup-tty-coding-system~
 挂在 ~tty-setup-hook~ 与 ~server-after-make-frame-hook~ 上，进每个帧时判断它是不是终端帧。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; Encoding & locale
 (set-locale-environment "en_US.UTF-8")
 (prefer-coding-system 'utf-8-unix)
@@ -969,7 +990,7 @@ mode 真的开着——定时器归属跟着模式走，而不是跟着变量走
 存路径时摘掉 TRAMP 的 autoload handler，免得为了看一眼本地文件就把 TRAMP 拉起来；一条在跳转之后
 ~recenter~，否则光标可能落在屏幕外。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; History
 ;;; [save-place-mode] save place lastly visited
 (use-package saveplace
@@ -1009,7 +1030,7 @@ File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这�
 个目录。~recentf-filename-handlers~ 里 ~substring-no-properties~ 必须排第一，注释解释了原因——文
 本属性会撑大保存文件。最后一条 hook 让 dired 访问的目录也进列表。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;;; [recentf] recently visited files
 (use-package recentf
   :bind (("C-x C-r" . recentf-open-files))
@@ -1054,7 +1075,7 @@ File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这�
 ~+savehist-clean-values-a~ 在保存前统一去掉文本属性：kill-ring 里带属性的字符串会显著撑大历史文
 件。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;;; [savehist] Save variables to file
 (use-package savehist
   :hook (after-init . savehist-mode)
@@ -1106,7 +1127,7 @@ File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这�
 覆盖表。那份 mode 名单必须与后文（~init-emacs-highlight~、~init-emacs-edit~、~init-emacs-prog~ 等）真的启用了什么
 对上，否则长行里仍有东西在跑。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [so-long] Workaround for long one-line file
 (use-package so-long
   :hook ((after-init . global-so-long-mode))
@@ -1148,7 +1169,7 @@ File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这�
 
 这里只有一行 ~after-init~ 打开它——没有需要调的参数，本配置也不改 ~glyphless-mode-types~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [glyphless-display] Don't render glyphs, in case of undisplayable characters.
 (use-package glyphless-mode
   :hook (after-init . glyphless-display-mode))
@@ -1160,7 +1181,7 @@ File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这�
 定位换速度，~scroll-step~ / ~scroll-margin~ 决定一次滚多少行、边上留几行，~auto-window-vscroll~
 关掉后光标在长行上不会跟着微调。~[hscroll]~ 那一组是横向滚动的对应参数。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [Scrolling]
 (setq
  ;; Performant and rapid scrolling
@@ -1189,7 +1210,7 @@ File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这�
 键位用 ~bind-keys*~ 而不是 ~bind-keys~：前者写进 ~override-global-map~，不会被其它 mode 的同名键
 位盖掉——这正是滚动键需要的行为。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 (defvar +scrolling-lines 10)
 (defun +scroll-other-window () (interactive) (scroll-other-window +scrolling-lines))
 (defun +scroll-other-window-down () (interactive) (scroll-other-window-down +scrolling-lines))
@@ -1219,7 +1240,7 @@ MessagePack-RPC 通信，把「多次 shell 往返」压成一次批量请求，
 ~tramp-rpc-deploy-git-build-policy 'release~ 决定远端没有预编译二进制时自动部署、且优先取 release
 构建。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [tramp] Edit file remotely
 (use-package tramp
   :config
@@ -1250,7 +1271,7 @@ MessagePack-RPC 通信，把「多次 shell 往返」压成一次批量请求，
 ~minibuffer-follows-selected-frame nil~ 让 minibuffer 固定在一个帧上，多帧使用时不会跟着焦点在帧
 之间跳；配合 ~:hook~ 里打开的 ~minibuffer-electric-default-mode~，默认值只在需要时显示。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [minibuffer]
 (use-package minibuffer
   :hook (after-init . minibuffer-electric-default-mode)
@@ -1269,7 +1290,7 @@ inferior lisp 等都建在它上面，共享同一套交互与按键。
 给输出一个上限；~comint-pager "cat"~ 让 eshell 与 shell 不去调用分页器（分页器会占住终端）；
 ~comint-history-isearch 'dwim~ 让历史搜索按上下文决定起点。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [comint] Command interpreter
 (use-package comint
   :config
@@ -1293,13 +1314,14 @@ README 的问题陈述是「命令在 shell 里能用，在 Emacs 里不能」�
 ~:unless noninteractive~，并在 ~:init~ 里立刻调用 ~exec-path-from-shell-initialize~——理由写在注
 释里：mode hook 在启动期间就可能需要外部程序，等到 ~:config~ 就晚了。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [environment variables]
 (use-package exec-path-from-shell
   :straight t
   :unless noninteractive
   :init
-  (setq exec-path-from-shell-shell-name "/etc/profiles/per-user/dragon/bin/fish"
+  (setq exec-path-from-shell-shell-name
+        (or (executable-find "fish") (getenv "SHELL") shell-file-name)
         exec-path-from-shell-arguments nil
         exec-path-from-shell-variables
         '("PATH" "MANPATH" "PKG_CONFIG_PATH"
@@ -1318,7 +1340,7 @@ README 的问题陈述是「命令在 shell 里能用，在 Emacs 里不能」�
 本配置只装不配：一行 ~:straight t~，没有键位。它是 ~M-x~ 偶尔调用的工具，配合上面那批
 ~version-control~ / ~kept-new-versions~ 设置才有素材可用。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [backup walker] A utility to view Emacs backup files.
 (use-package backup-walker
   :straight t)
@@ -1333,7 +1355,7 @@ Emacs ≥ 26.0.91）。
 fork 用 posframe 弹窗。显式 ~:straight t~ 是为了让来源与版本固定下来，而不是「反正会被间接装
 上」。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [posframe]
 (use-package posframe :straight t)
 #+end_src
@@ -1347,7 +1369,7 @@ fork 用 posframe 弹窗。显式 ~:straight t~ 是为了让来源与版本固�
 搜索、magit），并在 ~project-prefix-map~ 上加一条 ~m~ → ~magit-status~。
 ~:straight (:type built-in)~ 是显式声明「这是内置包」，与那些从 MELPA 装的包区分开。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [project] Project manager
 (use-package project
   :straight (:type built-in)
@@ -1371,7 +1393,7 @@ fork 用 posframe 弹窗。显式 ~:straight t~ 是为了让来源与版本固�
 注释特意写明「Applies on every system, not only macOS」：macOS 上最容易碰到，但这属于输入设备的
 通病，所以不做平台判断。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; Prevent accidental touch.  Applies on every system, not only macOS.
 (unbind-key "C-<wheel-down>")
 (unbind-key "C-<wheel-up>")
@@ -1389,7 +1411,7 @@ Eshell 是内置的 Emacs 原生 shell：Commentary 说它用起来像 shell mod
 它保持一个块，不按话题拆开：这四件事都在同一个 ~use-package~ form 里，拆到 form 中间会让每个块单
 独不可求值，而按 form 拆就需要把它们改写成多个 ~use-package~，那属于改代码而不是改文档。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [eshell] Emacs command shell
 (use-package esh-mode
   :defines eshell-prompt-function
@@ -1600,7 +1622,7 @@ zsh-syntax-highlighting 与 fish 的原生高亮。
 ~:after eshell~ 加上 ~eshell-mode~ hook，进入 Eshell 才打开；它只影响显示，不改输入行为，所以不
 需要任何额外配置。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [esh-syntax-highlighting] Fish-like syntax highlighting
 (use-package eshell-syntax-highlighting
   :straight t
@@ -1616,7 +1638,7 @@ zsh-syntax-highlighting 与 fish 的原生高亮。
 本配置只留 =eshell/z= 一个入口（~:commands~），不设任何变量：数据文件路径与 ~z~ 的默认约定一致时
 才谈得上共用，而这里并没有改它。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [eshell-z] `cd' to frequent directory in `eshell'
 (use-package eshell-z
   :straight t
@@ -1632,7 +1654,7 @@ README 一句话讲完：用 Corfu 与 ~corfu-candidate-overlay~ 给 Eshell 做 
 
 一行 ~:hook~：只在 ~eshell-mode~ 里开启，不占全局。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 (use-package esh-autosuggest-corfu
   :straight (:host github :repo "roife/esh-autosuggest-corfu")
   :hook (eshell-mode . esh-autosuggest-corfu-mode))
@@ -1649,7 +1671,7 @@ README 一句话讲完：用 Corfu 与 ~corfu-candidate-overlay~ 给 Eshell 做 
 ~eshell-mode~ 上。~:config~ 里那条 ~:override~ advice 把上游的 man 摘录函数整段换成一个带缓存的
 版本：命中 ~esh-help-man-cache~ 直接返回，未命中才解析 ~SYNOPSIS~ 段并写回缓存。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 (use-package esh-help
   :straight t
   :preface
@@ -1684,7 +1706,7 @@ buffer、~shell-mode~、~comint-mode~ 与 ~eshell-mode~，从不执行示例命�
 ~esh-tldr-use-tempel t~ 让插入走 Tempel（与 ~init-emacs-completion~ 里的 tempel 一致）。注释记了一笔历
 史：旧入口 ~consult-esh-tldr~ 已删除，现在靠 ~completing-read~ 补全页面名。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [esh-tldr] Browse local tldr pages
 (use-package esh-tldr
   :straight (:host github :repo "roife/esh-tldr")
@@ -1704,7 +1726,7 @@ buffer、~shell-mode~、~comint-mode~ 与 ~eshell-mode~，从不执行示例命�
 题：注释里写明 ~pcomplete-completions~ 返回的是函数，而上游无条件当列表用，于是很多情况下直接
 wrong-type-arg；改成 ~all-completions~ 两种情形都能处理。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 (use-package eshell-did-you-mean
   :straight t
   :after esh-mode
@@ -1735,7 +1757,7 @@ popup 共用 Popper 的同一套窗口规则。
 
 ~ghostel-eshell~ 只有一行：让 Eshell 里的 visual command 走 ghostel 而不是终端窗口。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 (use-package ghostel
   :straight t
   :preface
@@ -1793,7 +1815,7 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 这两个 ~set-display-table-slot~ 只在 tty 有意义，所以放在 kkp 与 xterm 这两块终端设置旁边，而不
 是放进 ~init-emacs-ui~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; warp/truncation indicator in tty
 (set-display-table-slot standard-display-table
                         'wrap
@@ -1814,7 +1836,7 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 ~kkp-restore-legacy-keys-around-subprocesses t~ 必须在模式打开之前设——注释写明理由：KKP 会把
 ~C-g~ 发成 CSI-u，不设它就无法中断一个阻塞中的 ~call-process~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [Kitty Keyboard Protocol] Implements support for Kitty's "keyboard protocol",
 ;; which allows the terminal to send key events to Emacs.
 (use-package kkp
@@ -1836,7 +1858,7 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 后交给 ~xterm--set-background-mode~，让 ~background-mode~ 终端参数有意义，再调一次
 ~+load-theme~。这是 tty 下跟随明暗主题的路径，与 ~init-emacs-platform~ 那条图形帧路径互补。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [xterm]
 (use-package term/xterm
   :hook (tty-setup . xterm-mouse-mode)
@@ -1869,7 +1891,7 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 这里只调观感与节奏：分隔符、列数上限 3、描述长度 40、一级延迟 1.5 秒、二级 0.25 秒。~after-init~
 打开，不占启动路径。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [which-key] Discover key bindings as you type
 (use-package which-key
   :hook (after-init . which-key-mode)
@@ -1892,7 +1914,7 @@ Timer Must Run"。
 ~tmr-description-list~ 指向 ~tmr-description-history~——那个变量在 ~savehist~ 那里已经被点名保
 存，所以描述历史跨 session 保留。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [tmr] Set timers
 (use-package tmr
   :straight t
@@ -1911,7 +1933,7 @@ Timer Must Run"。
 （~password-store-time-before-clipboard-restore~）。~pass~ 只声明安装，用来在需要浏览整棵目录树
 时 ~M-x pass~ 打开。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [pass] Password store interface
 (use-package password-store
   :straight t
@@ -1927,7 +1949,7 @@ Timer Must Run"。
 
 ~provide~ 把 ~init-emacs-core~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el
+#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 (provide 'init-emacs-core)
 #+end_src
 
@@ -1949,7 +1971,7 @@ teal-gray 文字配 dusty rose 强调。调色板按语义 key 定义，可以�
 ashen 目录，所以这个声明既不能挪到 ~init-emacs-ui~，也不能挪到文件后面——这是全文少数「位置本身就是正确
 性」的地方。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-theme.el
+#+begin_src emacs-lisp :tangle core/init-emacs-theme.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 ;; Declared here, not in init-emacs-ui: `init.el' requires init-emacs-theme before init-emacs-ui and
 ;; +load-theme runs immediately below (tty-setup-hook with
@@ -1971,7 +1993,7 @@ ashen 目录，所以这个声明既不能挪到 ~init-emacs-ui~，也不能挪�
 注意第三个变量紧贴着上一个（没有空行）：它和两个 ~defcustom~ 是同一组声明，只是性质不同，所以没
 有被空行分开。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-theme.el
+#+begin_src emacs-lisp :tangle core/init-emacs-theme.el :mkdirp yes
 (defcustom +light-theme 'ashen-day
   "Theme used when the system appearance is light."
   :type 'symbol
@@ -2001,7 +2023,7 @@ macOS 上轮询 ~AppleInterfaceStyle~，两边都只调用 ~+system-appearance-c
 ~after-make-frame-functions~ 上另有一个函数，负责新建图形帧时补一次，因为 daemon 的第一个帧可能
 晚于这一切。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-theme.el
+#+begin_src emacs-lisp :tangle core/init-emacs-theme.el :mkdirp yes
 (defun +system-appearance-changed (appearance)
   "Remember APPEARANCE and update the theme using a graphical frame."
   (setq +system-appearance appearance)
@@ -2040,7 +2062,7 @@ macOS 上轮询 ~AppleInterfaceStyle~，两边都只调用 ~+system-appearance-c
 
 ~provide~ 把 ~init-emacs-theme~ 登记成 feature，~init-emacs-platform~ 的那两条调用路径就是在它之后才成立的。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-theme.el
+#+begin_src emacs-lisp :tangle core/init-emacs-theme.el :mkdirp yes
 (provide 'init-emacs-theme)
 #+end_src
 
@@ -2063,7 +2085,7 @@ fontification（docstring 说它类似 ~fast-but-imprecise-scrolling~，但只�
 ~blink-cursor-mode~ 关掉光标闪烁。这一条纯属偏好，与上面四条无关，只是恰好落在同一片区域里（它在
 下一个分组 ~[Cursor]~ 下）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; -*- lexical-binding: t; -*-
 
 ;; Optimization
@@ -2094,7 +2116,7 @@ fontification（docstring 说它类似 ~fast-but-imprecise-scrolling~，但只�
 永久跳过（Emacs ≥ 24.1 的行为），所以这一条表达的是「这些 mode 里永不出现行号」。名单里是 telega、
 elfeed、mu4e 与 ghostel 的十几个 mode：都是流式内容，行号没有意义，还会随刷新抖动。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; [Line & column numbers] relative line numbers, plus column number in mode-line
 (setopt display-line-numbers-type 'relative)
 (global-display-line-numbers-mode 1)
@@ -2126,7 +2148,7 @@ elfeed、mu4e 与 ghostel 的十几个 mode：都是流式内容，行号没有�
 成两个点的图案、把直箭头换成更矮的楔形，理由只有一个——默认符号太大。位图是手写的 8×8 二进制，
 改动时注意每行正好 8 位。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; [Fringes] Reduce the clutter in the fringes, but indicate eob lines
 (setq indicate-buffer-boundaries nil
       indicate-empty-lines t)
@@ -2172,7 +2194,7 @@ elfeed、mu4e 与 ghostel 的十几个 mode：都是流式内容，行号没有�
 menu-bar、tool-bar 与竖向滚动条的帧参数设成 0 / nil：模式变量只影响设置当时的帧，之后新建的
 client 帧会把这些组件恢复回来，代码注释里的 workaround 就是这个。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; Allow [resize] by pixels.
 (setq frame-resize-pixelwise t
       window-resize-pixelwise t)
@@ -2205,7 +2227,7 @@ docstring 明说只有在 ~enable-recursive-minibuffers~ 非 nil 时才有用，
 不可编辑的地方）；~epg-pinentry-mode~ 设成 ~loopback~，让 gpg 的密码询问走 minibuffer 而不是弹
 pinentry——终端帧里后者根本弹不出来。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; [Minibuffer]
 ;; Allow minibuffer commands while in the minibuffer.
 (setq enable-recursive-minibuffers t
@@ -2240,7 +2262,7 @@ charset 会把 Latin 字体一起顶掉，所以没有那样做。
 排时不会出现字号跳变；~+org-set-buffer-font~ 用 ~buffer-face-set~ 只给当前 Org buffer 换字体，不改
 全局。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; CJK uses LXGW WenKai. It is proportional, so it is not the same width as PragmataPro.
 (defconst +default-font "PragmataPro 14")
 (defconst +org-font "PragmataPro Liga 14")
@@ -2304,7 +2326,7 @@ charset 会把 Latin 字体一起顶掉，所以没有那样做。
 并且把 ~((control) . nil)~ 写成了关掉——Ctrl+滚轮原本做 text-scale，缩放已经有 ~init-emacs-window~ 的键
 位，滚轮上再挂一份只会误触。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; Smooth Scroll (less "jumpy" than defaults)
 (setq mouse-wheel-scroll-amount '(2 ((shift) . hscroll) ((control) . nil))
       mouse-wheel-scroll-amount-horizontal 1
@@ -2320,7 +2342,7 @@ charset 会把 Latin 字体一起顶掉，所以没有那样做。
 这里设成 ~t~，等于放弃那道闸，换来首次启动（换机器、换 Nix 代际也一样）不会被一个 modal 卡在
 daemon 启动里。它出现在外观层是因为只有主题会读它，但作用其实是启动可靠性。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; Load theme
 ;; Don't prompt to confirm theme safety. This avoids problems with
 ;; first-time startup on Emacs > 26.3.
@@ -2336,7 +2358,7 @@ daemon 启动里。它出现在外观层是因为只有主题会读它，但作�
 模式挂在 ~window-setup-hook~ 而不是 ~after-init-hook~：它要在第一个帧的窗口布局建好之后才开，否则
 daemon 启动时没有窗口可画。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; [window-divider] Display window divider
 (setq window-divider-default-places t
       window-divider-default-bottom-width 1
@@ -2354,7 +2376,7 @@ MonoLisaCode，实际字体是 PragmataPro Liga，表没动）。Org 必须排�
 调定界符藏起来，连字仍可能把「看不见的定界符」和可见内容合成一个字形，于是 ==path/**== 的结尾会漏
 出半个定界符。这是少数「渲染层的问题只能在配置层绕开」的例子。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; [ligature] ligature support for Emacs
 (use-package ligature
   :straight t
@@ -2398,7 +2420,7 @@ MonoLisaCode，实际字体是 PragmataPro Liga，表没动）。Org 必须排�
 都是「等一等、合并一下」的方向，避免滚轮一动就让每个窗口各算一遍。其余选项保持默认（区域是
 ~fringe~，启动时打开全部标志组）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; [scrollview] Show scroll progress in the fringe
 (use-package scrollview
   :straight (:type git :host github :repo "roife/scrollview.el" :branch "main")
@@ -2414,7 +2436,7 @@ MonoLisaCode，实际字体是 PragmataPro Liga，表没动）。Org 必须排�
 ~(:eval (or buffer-file-truename "%b"))~：文件 buffer 显示真实路径（~truename~ 会解开符号链接），其
 它 buffer 回落到 buffer 名，于是任务栏与标签页里能区分同名文件。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 (setq frame-title-format
       '((:eval (or buffer-file-truename "%b"))))
 #+end_src
@@ -2429,7 +2451,7 @@ kitty、wezterm、foot 以及 tmux 里都成立。
 不是直接调用，是因为那个函数本身就是「注册一个到第一个终端帧才开模式」的入口：daemon 启动时没有终
 端，全局模式在那里判断不了能力，它同时兼容 daemon、GUI server 与 ~emacs -nw~ 三种情形。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; [Kitty Graphics Protocol] Implements support for Kitty's "graphics protocol",
 ;; which allows the terminal to display images and videos inline.
 (use-package kitty-graphics
@@ -2443,7 +2465,7 @@ kitty、wezterm、foot 以及 tmux 里都成立。
 
 ~provide~ 把 ~init-emacs-ui~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 (provide 'init-emacs-ui)
 #+end_src
 
@@ -2467,7 +2489,7 @@ kitty、wezterm、foot 以及 tmux 里都成立。
 ~+linux-appearance-signal~ 里，帧创建时若已注册就复用，避免每个新帧多挂一个信号；hook 上带
 ~:call-immediately~，daemon 启动时先跑一次，不必等第一个 client 帧。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-platform.el
+#+begin_src emacs-lisp :tangle core/init-emacs-platform.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 (when (eq system-type 'gnu/linux)
   ;; Follow KDE, GNOME, and other desktops exposing the XDG Settings portal.
@@ -2526,7 +2548,7 @@ macOS 的外观只有一条权威来源：~defaults read -g AppleInterfaceStyle~
 关闭标签、~s-o~ 切窗口、~s-SPC~ 输入法），并解绑 ~s-,~——它默认弹出 Emacs 的相关选项，容易与系统偏
 好设置混淆。两件事共用一个 ~(when (eq system-type 'darwin) ...)~，所以合成一节、一块。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-platform.el
+#+begin_src emacs-lisp :tangle core/init-emacs-platform.el :mkdirp yes
 (when (eq system-type 'darwin)
   ;; Nix Emacs does not update `toolkit-theme' on macOS.  `+load-theme'
   ;; follows `+system-appearance', so publish that from AppleInterfaceStyle.
@@ -2587,7 +2609,7 @@ macOS 的外观只有一条权威来源：~defaults read -g AppleInterfaceStyle~
 ~provide~ 在最后，两个 ~when~ 之后：别的平台上这个模块空加载，但 feature 一样登记，=init.el= 的
 ~require~ 不会因为平台不同而失败。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-platform.el
+#+begin_src emacs-lisp :tangle core/init-emacs-platform.el :mkdirp yes
 (provide 'init-emacs-platform)
 #+end_src
 
@@ -2609,7 +2631,7 @@ buffer 都打开。它默认高亮整行，~hl-line-sticky-flag~ 决定是否在
 symbol-overlay 之类）不会被盖掉。同一处的 ~hl-line-sticky-flag nil~ 其实是照抄来的：docstring 明说
 它在 global 模式下无效，global 模式看的是 ~global-hl-line-sticky-flag~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; [hl-line] Highlight current line
@@ -2634,7 +2656,7 @@ symbol-overlay 之类）不会被盖掉。同一处的 ~hl-line-sticky-flag nil~
 行——长函数里这是唯一能看到配对处上下文的方式。~show-paren-match~ 被改成 SpringGreen3 加下划线与粗
 体，主题给的是 iris 底色，在深色背景上不够跳。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [show-paren-mode] Highlight matching parens
 (use-package paren
   :custom-face (show-paren-match ((t (:foreground "SpringGreen3" :underline t :weight bold))))
@@ -2656,7 +2678,7 @@ symbol-overlay 之类）不会被盖掉。同一处的 ~hl-line-sticky-flag nil~
 这里是「只看坏空白」的用法：~style~ 里不含 ~tabs~、~spaces~、~newline~，所以正常的空格与缩进不会被
 染上底色，只有 review 会盯的那几种才亮起来。它挂 ~prog-mode~ / ~conf-mode~ / ~yaml-mode~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [whitespace] Show visualize TAB, (HARD) SPC, newline
 (use-package whitespace
   :hook ((prog-mode conf-mode yaml-mode) . whitespace-mode)
@@ -2674,7 +2696,7 @@ symbol-overlay 之类）不会被盖掉。同一处的 ~hl-line-sticky-flag nil~
 本配置只挂 ~prog-mode~，位置用 ~init-emacs-core~ 里定的 ~fill-column 80~——两处是同一个数字，那一节也写
 明了「后面 display-fill-column-indicator 那一节才有意义」。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [display-fill-column-indicator] Show a line at 80 char
 (use-package display-fill-column-indicator
   :hook (prog-mode . display-fill-column-indicator-mode))
@@ -2689,7 +2711,7 @@ README 说它按嵌套深度给括号、方括号、花括号上色，每一层�
 ashen 定义了 1 到 9 层颜色，压到 5 意味着第 6 层之后回到第 1 层循环。代码里没写理由，效果是同一屏里
 出现的颜色种类更少。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [rainbow-delimiters] Highlight brackets according to their depth
 (use-package rainbow-delimiters
   :straight t
@@ -2707,7 +2729,7 @@ ashen 定义了 1 到 9 层颜色，压到 5 意味着第 6 层之后回到第 1
 保留而不是删掉，是因为否决的理由本身是这条配置决定的一部分：想恢复的人先读到代价。块里的代码逐字未
 动，取消注释即可生效（其中 ~minibuffer-setup~ 那一条是它的附带用法，这里同样没开）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [highlight-parentheses] Highlight surrounding parentheses
 ;; Disabled: the underlined outer parens are too noisy next to
 ;; `rainbow-delimiters', which already colors every depth.
@@ -2729,7 +2751,7 @@ ashen 定义了 1 到 9 层颜色，压到 5 意味着第 6 层之后回到第 1
 本配置只在 ~html-mode~ / ~css-mode~ 打开它，另外在 ~help-mode-map~ 里把 ~r~ 绑到 ~rainbow-mode~——
 读 face 文档时按一下就能看到颜色，不用切 buffer。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [rainbow-mode] Colorize color names in buffers
 (use-package rainbow-mode
   :straight t
@@ -2750,7 +2772,7 @@ face，~hl-todo-require-punctuation t~ 则要求那个冒号必须存在，于�
 上挂 ~+hl-update-keyword-faces~，每次换主题按 ~error~ / ~warning~ 的当前前景色重设一遍
 （~BUG~ / ~DEFECT~ / ~ISSUE~ 跟 error，~WORKAROUND~ / ~HACK~ / ~TRICK~ 跟 warning）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [hl-todo] Highlight TODO and similar keywords in comments and strings
 (use-package hl-todo
   :straight t
@@ -2782,7 +2804,7 @@ face，~hl-todo-require-punctuation t~ 则要求那个冒号必须存在，于�
 本配置没装它：普通打字不触发，只有那几类命令才闪一下，日常几乎看不到效果——注释里写的就是这个理由。
 代码逐字保留，恢复只需取消注释。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [goggles] Highlight modified region
 ;; Disabled: it only pulses undo/yank/kill/delete/transpose, so plain
 ;; typing never triggers it.
@@ -2810,7 +2832,7 @@ overlay 默认在所有显示同一 buffer 的窗口里都可见。
 数值上把脉冲从默认的 0.03 秒 × 10 次改成 0.2 秒 × 1 次：一次性、看得清。~M-SPC~ 手动触发；两个
 pulse face 继承 ~region~ 但去掉背景色，免得闪的那一下太抢眼。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [pulse] Highlight line at cursor after switching window
 (use-package pulse
   :custom-face
@@ -2868,7 +2890,7 @@ README 说它用 overlay 高亮同一符号的所有出现（而不是 ~highligh
 ~yaml-mode~；~symbol-overlay-temp-highlight-on-region~ 打开后选中一段再操作也会临时高亮，这是它与
 「只高亮光标下符号」的区别。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [symbol-overlay] Highlight symbols
 (use-package symbol-overlay
   :straight (:host github :repo "roife/symbol-overlay" :branch "master")
@@ -2899,7 +2921,7 @@ property 记下来，~highlight-changes-visible-mode~ 决定要不要把它们�
 ~highlight-changes~ 标志组要求 mode 与 visible mode 同时开着（源码里
 ~scrollview--highlight-changes-active-p~ 两个都检查），所以在当前设置下那组标志不会亮。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 ;; [highlight]
 (use-package hilit-chg
   :preface
@@ -2920,7 +2942,7 @@ property 记下来，~highlight-changes-visible-mode~ 决定要不要把它们�
 
 ~provide~ 把 ~init-emacs-highlight~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el
+#+begin_src emacs-lisp :tangle core/init-emacs-highlight.el :mkdirp yes
 (provide 'init-emacs-highlight)
 #+end_src
 
@@ -2943,7 +2965,7 @@ popper 指示器用，继承 ~font-lock-function-name-face~ 加粗体，所以�
 ~enable-theme-functions~ 与 ~after-init-hook~：换主题要重设，而首次启动时主题已经加载完，
 ~enable-theme-functions~ 不会再触发。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el
+#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;;; face
@@ -2986,7 +3008,7 @@ Customize 都不会把全局 header line 打开，于是 header line 只出现�
 顺带说明现状：本文件只安装并预置了 ~breadcrumb~，没有开 ~breadcrumb-mode~ 或
 ~breadcrumb-local-mode~，所以眼下没有任何 buffer 会显示 crumb。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el
+#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el :mkdirp yes
 (setq-default header-line-format nil)
 #+end_src
 
@@ -3002,7 +3024,7 @@ leaf），四个变量定分隔符（~⋅~）、两条长度上限（占窗口�
 ~bc-~ 映射成 ~breadcrumb-~，那是读取那份源码时的展开；配置在另一个文件里读，写短前缀只会得到一个不
 存在的变量。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el
+#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el :mkdirp yes
 ;;; Header Line
 ;; [breadcrumb] Add breadcrumb navigation in header-line
 (use-package breadcrumb
@@ -3044,7 +3066,7 @@ configuration，所以它是工作区，不是 buffer 列表。~tab-bar-format~ 
 第三层是 daemon 下的 workaround：新建帧与 ~window-setup~ 时手动重建一次 tab-bar 行
 （~tab-bar--update-tab-bar-lines~ 加 ~force-mode-line-update~），否则 client 帧会缺标签。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el
+#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el :mkdirp yes
 ;; [tab-bar] Tab bar
 (use-package tab-bar
   :hook (after-init . tab-bar-mode)
@@ -3162,7 +3184,7 @@ configuration，所以它是工作区，不是 buffer 列表。~tab-bar-format~ 
 本配置在 ~after-init~ 打开它，格式写成 ~" %b%p%% "~：两侧留空格与相邻字段隔开，中间是状态码加电
 量：接电源、电量 81% 时显示成 ~" 81% "~（状态码为空表示电量正常）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el
+#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el :mkdirp yes
 ;; [battery] Show battery status on the mode line
 (use-package battery
   :hook (after-init . display-battery-mode)
@@ -3174,7 +3196,7 @@ configuration，所以它是工作区，不是 buffer 列表。~tab-bar-format~ 
 
 ~provide~ 把 ~init-emacs-modeline~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el
+#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el :mkdirp yes
 (provide 'init-emacs-modeline)
 #+end_src
 
@@ -3203,7 +3225,7 @@ prompt。~C-RET~ 绑 ~vertico-exit-input~，用来「输入到此为止」，既
 必须位于文件最前面。注释里那句 recipe 说明是本地踩坑记录：MELPA 的 recipe 已经包含
 =extensions/*.el=，再自定义 ~:files~ 会让 straight 看到同一个包的两份不同 recipe 并告警。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;;; Minibuffer
@@ -3228,7 +3250,7 @@ prompt。~C-RET~ 绑 ~vertico-exit-input~，用来「输入到此为止」，既
 的目录导航命令」。三个动作各占一个键：~RET~ 进入目录（而不是接受当前候选）、~DEL~ 删掉路径里的一
 个字符、~M-DEL~ 删掉一整段。README 给出的示例配置就是这三行，这里照抄，没有额外调整。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package vertico-directory
   :after vertico
   :bind (:map vertico-map
@@ -3243,7 +3265,7 @@ prompt。~C-RET~ 绑 ~vertico-exit-input~，用来「输入到此为止」，既
 比上下移动快。本配置只绑一个入口 ~C-,~ → ~vertico-quick-jump~，与 ~init-emacs-search~ 里 avy 那一族键
 共用同一个前缀——语义上是同一件事，只是对象从屏幕上的文本换成了候选列表。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package vertico-quick
   :after vertico
   :bind (:map vertico-map
@@ -3260,7 +3282,7 @@ prompt。~C-RET~ 绑 ~vertico-exit-input~，用来「输入到此为止」，既
 ~vertico-buffer--setup~ 之前调 ~mode-line-invisible-mode~，让候选 buffer 不带模式行。advice 名字
 里的 ~disbale~ 是原代码的拼写错误，保留原样以免动代码。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package vertico-buffer
   :after vertico
   :hook (vertico-mode . vertico-buffer-mode)
@@ -3287,7 +3309,7 @@ prompt。~C-RET~ 绑 ~vertico-exit-input~，用来「输入到此为止」，既
 ~orderless-escapable-split~（空格可用反斜杠转义），~completions-sort~ 设为 ~historical~，排序因
 此来自输入历史而不是字母序。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 ;;; Matching styles
 
 (use-package orderless
@@ -3330,7 +3352,7 @@ prompt。~C-RET~ 绑 ~vertico-exit-input~，用来「输入到此为止」，既
 本配置一行：hook 在 ~vertico-mode~ 之后开 ~marginalia-mode~。这个顺序有实际意义，注解是渲染在
 Vertico 的候选行上的，UI 不在就没有地方显示。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package marginalia
   :straight t
   :hook (vertico-mode . marginalia-mode))
@@ -3351,7 +3373,7 @@ Vertico 的候选行上的，UI 不在就没有地方显示。
 ~minibuffer-local-map~ 而不是全局。全局绑定会被 ~org-ctrl-c-ctrl-c~ 与 ~comment-dwim~ 在各自的
 major mode 里遮住，等于时灵时不灵；绑在 minibuffer 里，这组键只在「有候选可收集」的场合存在。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 ;;; Actions and search commands
 
 (use-package embark
@@ -3391,7 +3413,7 @@ major mode 里遮住，等于时灵时不灵；绑在 minibuffer 里，这组键
 本配置只写 ~:after (embark consult)~，一个键位都没有：两个依赖就绪后它的多候选类型自动生效，动作
 键属于 ~embark-general-map~，不需要再绑。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package embark-consult
   :straight t
   :after (embark consult))
@@ -3422,7 +3444,7 @@ UI 与 Orderless 的匹配。
 ~:async~ 的：它是流水线本身，~consult--multi~ 会把 sink 传进来，再包一层 sink 就丢掉更新，所以这
 里直接用 ~consult--process-collection~ 的返回值。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package consult
   :straight t
   :bind (([remap bookmark-jump]                 . consult-bookmark)
@@ -3499,7 +3521,7 @@ UI 与 Orderless 的匹配。
 
 本配置 ~:after (embark avy)~，两个依赖都在别处装好；只绑这两个键，没有改任何状态。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package avy-embark-collect
   :straight (:host github :repo "oantolin/embark"
                    :files ("avy-embark-collect.el"))
@@ -3520,7 +3542,7 @@ UI 与 Orderless 的匹配。
 tramp 源（~ssh~ 与 ~local~）加到 ~consult-dir-sources~ 的最前面，否则远端路径排在本地目录之后，
 要翻很久。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 ;; [consult-dir] Insert path quickly in minibuffer
 (use-package consult-dir
   :straight t
@@ -3552,7 +3574,7 @@ eshell、text，加 agent-shell 的两个 mode），不做全局；~eshell-mode~
 最后那组参数都偏离默认值：循环、自动弹（前缀 2 字符、延迟 0.2 秒）、预选第一个候选而不是「合法时
 才选」、选中时不预显当前候选。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 ;;; In-buffer completion
 
 (use-package corfu
@@ -3603,7 +3625,7 @@ corfu 仓库 =extensions/= 下的扩展。README 说它记住选过的候选并�
 加入 ~savehist-additional-variables~，历史因此跨会话保留。用 ~with-eval-after-load~ 是因为这个变
 量只有 savehist 存在时才有人读。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package corfu-history
   :after corfu
   :config
@@ -3618,7 +3640,7 @@ corfu 仓库 =extensions/= 下的扩展。README 说它记住选过的候选并�
 candidate documentation or source）。延迟设成 ~'(1.0 . 1.0)~，停留 1 秒后显示、离开 1 秒后收起；
 默认短得多，翻候选时会一直闪。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package corfu-popupinfo
   :after corfu
   :config
@@ -3631,7 +3653,7 @@ candidate documentation or source）。延迟设成 ~'(1.0 . 1.0)~，停留 1 �
 第三个扩展，Avy 风格的快捷字母，候选很多时直接按字母选。绑在 ~C-, ,~，与 ~vertico-quick~ 的
 ~C-,~ 属于同一个前缀族。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package corfu-quick
   :after corfu
   :bind (:map corfu-map
@@ -3649,7 +3671,7 @@ capf」，也能把 Company 的 backend 转成 capf，所以配 corfu、company 
 ~cape-dabbrev-buffer-function~ 改成 ~buffer-list~，让它从所有 buffer 取词而不只是当前 buffer。
 ~cape-tex~ 只在 TeX、LaTeX、Org、Markdown 里挂，深度 90，排在多数 major mode 自带的 capf 之后。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package cape
   :straight t
   :hook ((TeX-mode LaTeX-mode org-mode markdown-ts-mode) . +cape-tex-setup)
@@ -3675,7 +3697,7 @@ capf」，也能把 Company 的 backend 转成 capf，所以配 corfu、company 
 ~tempel-map~ 里 ~TAB~ / ~S-TAB~ 在模板的可填域之间前后跳；~tempel-abbrev-mode~ 在 prog 与 text
 里开，让模板也能当 abbrev 展开。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 ;;; Snippets
 
 (use-package tempel
@@ -3704,7 +3726,7 @@ capf」，也能把 Company 的 backend 转成 capf，所以配 corfu、company 
 
 本配置只写 ~:straight t~ 与 ~:after tempel~，没有键位也没有参数——它提供的是数据。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package tempel-collection
   :straight t
   :after tempel)
@@ -3718,7 +3740,7 @@ capf」，也能把 Company 的 backend 转成 capf，所以配 corfu、company 
 本配置只改一条：~dabbrev-ignored-buffer-regexps~ 排除文件名形如 =.pdf= / ~.jpeg~ / ~.png~ 的
 buffer。二进制内容里没有可用的词，扫一遍只是浪费。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (use-package dabbrev
   :config
   (setq dabbrev-ignored-buffer-regexps '("\\.\\(?:pdf\\|jpe?g\\|png\\)\\'")))
@@ -3728,7 +3750,7 @@ buffer。二进制内容里没有可用的词，扫一遍只是浪费。
 
 ~provide~ 把 ~init-emacs-completion~ 登记成 feature，=init.el= 那条 ~require~ 找的就是这个名字。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-completion.el
+#+begin_src emacs-lisp :tangle core/init-emacs-completion.el :mkdirp yes
 (provide 'init-emacs-completion)
 #+end_src
 
@@ -3760,7 +3782,7 @@ buffer。二进制内容里没有可用的词，扫一遍只是浪费。
 键位上把 ~isearch-delete-char~ 换成 ~isearch-del-char~：退格改的是搜索串本身，而不是退回上一个匹
 配位置。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-search.el
+#+begin_src emacs-lisp :tangle core/init-emacs-search.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 ;; [isearch] Use builtin isearch to replace `anzu'
 (use-package isearch
@@ -3798,7 +3820,7 @@ buffer。二进制内容里没有可用的词，扫一遍只是浪费。
 配置里没有键位，因为它是从 shell 那侧调用的：~:commands ezf-client~ 只 autoload 客户端命令，
 ~:straight~ 写成 GitHub 源，因为 MELPA 上没有它。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-search.el
+#+begin_src emacs-lisp :tangle core/init-emacs-search.el :mkdirp yes
 ;; [ezf] Use Emacs completion from terminal shells
 (use-package ezf
   :straight (:type git :host github :repo "roife/ezf")
@@ -3813,7 +3835,7 @@ buffer。二进制内容里没有可用的词，扫一遍只是浪费。
 本配置按这个分工挂两个 hook：~text-mode~ 用全文版，~prog-mode~ 用注释/字符串版。源码里的域名几乎
 都在注释里，全文扫会把字符串常量里的普通词也当成链接。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-search.el
+#+begin_src emacs-lisp :tangle core/init-emacs-search.el :mkdirp yes
 ;; [goto-addr] Click to open URL
 (use-package goto-addr
   :hook ((text-mode . goto-address-mode)
@@ -3830,7 +3852,7 @@ buffer。二进制内容里没有可用的词，扫一遍只是浪费。
 ~avy-isearch~ 指定 ~pre~ 风格：搜索时匹配位置上有 lazy-highlight 的 overlay，而 ~pre~ 把候选键画
 在匹配起点之前，不覆盖匹配文本，键因此不会被高亮盖住。其余命令继续用全局默认风格。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-search.el
+#+begin_src emacs-lisp :tangle core/init-emacs-search.el :mkdirp yes
 ;; [avy] Jump with several key strock
 (use-package avy
   :straight t
@@ -3853,7 +3875,7 @@ mu4e 附件、mailto 地址。除打开之外它还提供复制与批量打开�
 本配置用两个：~C-, j~ 打开、~C-, c~ 复制到 kill-ring。它们与前两个包共用一个前缀，跳转、打开、复
 制都在 ~C-,~ 之下。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-search.el
+#+begin_src emacs-lisp :tangle core/init-emacs-search.el :mkdirp yes
 ;; [link-hint] Open URL in text with avy
 (use-package link-hint
   :straight t
@@ -3866,7 +3888,7 @@ mu4e 附件、mailto 地址。除打开之外它还提供复制与批量打开�
 
 ~provide~ 把 ~init-emacs-search~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-search.el
+#+begin_src emacs-lisp :tangle core/init-emacs-search.el :mkdirp yes
 (provide 'init-emacs-search)
 #+end_src
 
@@ -3889,7 +3911,7 @@ Emacs 的 kill 不会静默毁掉在别处复制的文本，之后仍能 ~C-y M-
 ~kill-ring-deindent-mode~ 是内置的全局次要模式：存进 kill-ring 的文本会按起始列向左去缩进。从深
 层缩进的代码里杀一行、粘到别处，不会带一串空格；需要保留原缩进时再手动调。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; [kill-ring]
@@ -3907,7 +3929,7 @@ Emacs 的 kill 不会静默毁掉在别处复制的文本，之后仍能 ~C-y M-
 ~executable-make-buffer-file-executable-if-script-p~ 是内置函数：保存时若 buffer 以 ~#!~ 开头，
 就给文件加上可执行位。挂在 ~after-save-hook~ 上，新写的脚本不必再记得 ~chmod +x~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; Make script file executable with `chmod +x' after save
 (add-hook! after-save-hook #'executable-make-buffer-file-executable-if-script-p)
 #+end_src
@@ -3928,7 +3950,7 @@ Emacs 的 kill 不会静默毁掉在别处复制的文本，之后仍能 ~C-y M-
 窗只会打断人。模式定义开头那一句是互斥保护：~global-auto-revert-mode~ 开着时把这个关掉，两套机制
 不并存。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [autorevert]
 (use-package autorevert
   :hook (find-file . +auto-revert-mode)
@@ -3986,7 +4008,7 @@ Emacs 的 kill 不会静默毁掉在别处复制的文本，之后仍能 ~C-y M-
 本配置只在 ~prog-mode~ 与 ~markdown-ts-mode~ 里开。不做全局是保守选择：全局打开会连带改动别人的
 文件、只读树里的文件，也会和 formatter 抢同一件事。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [ws-butler] Remove trailing whitespace with lines touched
 (use-package ws-butler
   :straight t
@@ -4001,7 +4023,7 @@ buffer-local 变量，把「这个项目怎么排」从个人偏好里分离出�
 本配置一行：~:hook (after-init . editorconfig-mode)~。挂在 ~after-init~ 而不是 ~:config~，是为了
 让它晚于各 major mode 的初始化——局部变量要在 mode 定完之后设，否则第一次打开文件时会被 mode 覆盖。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [editorconfig] Respect project-local formatting rules
 (use-package editorconfig
   :hook (after-init . editorconfig-mode))
@@ -4018,7 +4040,7 @@ autoload ~apheleia-format-buffer~，全局模式由 autoload 自己负责，不�
 ~apheleia-hide-log-buffers t~ 给格式化器的日志 buffer 名字前面加一个空格——README 说明这不会删掉
 它们，只是让它们默认不出现在 ~switch-to-buffer~ 列表里，要看得先敲一个空格。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [apheleia] Format buffers asynchronously without moving point
 (use-package apheleia
   :straight t
@@ -4040,7 +4062,7 @@ autoload ~apheleia-format-buffer~，全局模式由 autoload 自己负责，不�
 Markdown 是反引号代码、代码块、模板插值（~{{…}}~）与数学。第三，两个 hook 都先用
 ~make-local-variable~ 复制一份再改——跳表是 buffer-local 的，不复制就会串到别的 buffer。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [ispell] Spell-checker backend
 (use-package ispell
   :hook ((org-mode . +ispell-org-skip-regions-h)
@@ -4087,7 +4109,7 @@ Markdown 是反引号代码、代码块、模板插值（~{{…}}~）与数学�
 buffer 少两行提示，~flyspell-use-meta-tab nil~ 把 ~M-TAB~ 让给别处，~flyspell-delay-use-timer t~
 用定时器代替 ~sit-for~，检查期间不阻塞输入。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [flyspell] Spell-checking overlays for writing modes
 (use-package flyspell
   :hook ((org-mode markdown-mode markdown-ts-mode typst-ts-mode
@@ -4125,7 +4147,7 @@ buffer 少两行提示，~flyspell-use-meta-tab nil~ 把 ~M-TAB~ 让给别处，
 局。另外在 ~ediff-prepare-buffer-hook~ 里对 outline 调 ~outline-show-all~：折叠状态下 diff 只看
 得见标题行。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [ediff] Diff & patch
 (use-package ediff
   :hook ((ediff-before-setup . +ediff-save-window-config)
@@ -4165,7 +4187,7 @@ buffer 少两行提示，~flyspell-use-meta-tab nil~ 把 ~M-TAB~ 让给别处，
 的是紧跟的 ~(electric-pair-mode 1)~。这一行保留原样，它记录的意图仍然成立，只是这个变量在这版
 Emacs 上不参与。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [elec-pair] Automatic parenthesis pairing
 (use-package elec-pair
   :preface
@@ -4186,7 +4208,7 @@ Emacs 上不参与。
 ~move-end-of-line~ 换 ~mwim-end-of-code-or-line~。键位与肌肉记忆不变，缩进代码里第一次 ~C-a~ 落
 在代码起点，再一次才落到行首。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [mwim] Better C-a C-e for programming
 (use-package mwim
   :straight t
@@ -4204,7 +4226,7 @@ Emacs 上不参与。
 式 ~add-hook~ 到 ~telega-root-mode-hook~——注释说明这是为了在全局模式已经开着的情况下也能装上这条
 规则。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [beginend] Better M-< M-> for programming
 (use-package beginend
   :straight t
@@ -4231,7 +4253,7 @@ Emacs 上不参与。
 唯一要留意的是 ~puni~ 那一节：~puni-mode~ 把 ~DEL~ 换成了本地命令 ~+puni-hungry-delete~，那儿对
 这个方法有显式处理，两条规则不冲突。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; Alternatives to [hungry-delete]
 (setq backward-delete-char-untabify-method 'hungry)
 #+end_src
@@ -4244,7 +4266,7 @@ Emacs 上不参与。
 本配置开在 ~prog-mode~ 与 ~minibuffer-setup~ 里。后者是为了在 minibuffer 里编辑 M-x 命令名或文件
 名时也按子词移动——那些名字几乎都是驼峰或连字符拼的。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [subword] Handling capitalized subwords
 (use-package subword
   :hook (((prog-mode minibuffer-setup) . subword-mode)))
@@ -4259,7 +4281,7 @@ Emacs 上不参与。
 本配置用 remap 接管两个内置键：~kill-ring-save~ → ~easy-kill~，~mark-sexp~ → ~easy-mark~。键位不
 变，行为换成可切换单位的版本。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [easy-kill] Kill & Mark things easily, extends functionality of M-w
 (use-package easy-kill
   :straight t
@@ -4276,7 +4298,7 @@ Emacs 上不参与。
 免得忘了自己正以 root 写文件。它与 ~embark~ 的 ~embark-file-map~ 里那个 ~s~ 动作是同一个入口的两
 个面。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [sudo-edit] edit file with su permissions
 (use-package sudo-edit
   :straight t
@@ -4296,7 +4318,7 @@ Emacs 上不参与。
 ~backward-delete-char-untabify~），其余情况交给 ~puni-backward-delete-char~ 做结构删除。这样「在
 缩进处退格」与「删一个 sexp」不会互相抢。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [puni]
 (use-package puni
   :straight t
@@ -4324,7 +4346,7 @@ Emacs 上不参与。
 本配置一行：~prog-mode~ 里开 ~dtrt-indent-mode~。它与 ~editorconfig~ 是分工关系：~editorconfig~
 读项目里声明的规则，~dtrt-indent~ 在没有任何声明时从文件内容反推。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [dtdr-indent] Detect indentation size
 (use-package dtrt-indent
   :straight t
@@ -4339,7 +4361,7 @@ Emacs 上不参与。
 
 本配置绑 ~C-=~ 扩张、~C--~ 收缩，没有改它的区域生成逻辑；子词识别由上面 ~subword~ 那一节保证。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [expreg]
 (use-package expreg
   :straight t
@@ -4355,7 +4377,7 @@ Emacs 上不参与。
 本配置只有 ~:straight t~，不绑键。对齐是一次性的编辑动作，占一个全局键不划算，用的时候
 ~M-x ialign~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [ialign] Interactive align
 (use-package ialign
   :straight t)
@@ -4382,7 +4404,7 @@ YAML 的块边界是缩进。
 
 键位两个：~C-c TAB~ → ~hs-cycle~（在这一个块上折叠/展开），~C-c `~ → ~hs-toggle-all~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [hideshow] Code folding
 (use-package hideshow
   :preface
@@ -4434,7 +4456,7 @@ YAML 的块边界是缩进。
 「在树里逛一圈再退出」本身就是一次撤销，不需要再单独确认。后一条其实等于包的默认值，写出来是为了
 把这条容易误会的语义固定下来：退出即落定，不存在「先看看再决定」的中间态。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [vundo] Undo tree
 (use-package vundo
   :straight t
@@ -4452,7 +4474,7 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
 复历史等于把明文漏进缓存）、~COMMIT_EDITMSG~ 与 ~git-rebase-todo~（magit 会重建它们，旧历史对不
 上）。检测到 ~zstd~ 时把压缩算法设成 ~zst~，注释里说明理由是速度而不是压缩率。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [undohist] Persist undo history
 (use-package undo-fu-session
   :straight t
@@ -4473,7 +4495,7 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
 本配置从 GitHub 装，只在 ~prog-mode~、~text-mode~、~conf-mode~ 里开。它是 buffer-local 的次要模
 式，README 也建议只给文本编辑类 mode 开；再往下每多一个 mode 都要单独挂钩，这里只取最常用的三类。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [undo-hl] Highlight undo changes
 (use-package undo-hl
   :straight (:host github :repo "casouri/undo-hl")
@@ -4489,7 +4511,7 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
 ~C-c C-n~ / ~C-c C-p~ 的方向感一致。~reb-re-syntax 'string~ 让输入按 Emacs 字符串语法读，于是反
 斜杠与 ~\n~ 的转义规则和写代码时一致，不必来回换算。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [re-builder]
 (use-package re-builder
   :bind (:map reb-mode-map
@@ -4509,7 +4531,7 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
 ~separedit-default-mode 'markdown-ts-mode~ 指定抽出来的编辑 buffer 用 Markdown，于是注释里的代码
 块、列表与链接都能正确高亮。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [separedit]
 (use-package separedit
   :straight t
@@ -4535,7 +4557,7 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
 （走 ~replace-match~ 的规则），非 nil 则原样照抄替换串。写出来是为了让「大小写跟随目标」这个决定
 在代码里看得见。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [substitute] Replace targets across the buffer
 ;; :demand t is load-bearing: `substitute-prefix-map' is a keymap variable, and
 ;; `C-c r' must therefore be a *prefix* binding before sub-keys are added
@@ -4560,7 +4582,7 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
 
 本配置只用两个方向键：~C-(~ 往前、~C-)~ 往后，与括号的视觉方向一致。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 ;; [goto-chg] Jump to the last change
 (use-package goto-chg
   :straight t
@@ -4572,7 +4594,7 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
 
 ~provide~ 把 ~init-emacs-edit~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-edit.el
+#+begin_src emacs-lisp :tangle core/init-emacs-edit.el :mkdirp yes
 (provide 'init-emacs-edit)
 #+end_src
 
@@ -4588,7 +4610,7 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
 
 旋转交给内置的 ~window-layout-rotate-anticlockwise~（docstring：把窗口的子窗口布局整体逆时针旋转 90°，不改变选中窗口），所以本模块不自己算尺寸：比例保持原样，只是排列方向变了。触发条件写死在 advice 里——两个窗口、叠放、最大化，三条缺一不动作，三个窗口以上不碰。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-window.el
+#+begin_src emacs-lisp :tangle core/init-emacs-window.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 (defadvice! +window-rotate-stacked-after-maximize-a (&rest _)
@@ -4610,7 +4632,7 @@ GNU ELPA 上的选窗包。README 把它定位成 ~other-window~ 与 ~windmove-l
 
 三条设置里 ~aw-scope 'global~ 是默认值的显式复述，另两条是改动：~aw-background nil~ 关掉「选窗时把其他窗口暂时变暗」（docstring：默认 t 会 dim out），~aw-ignore-current t~ 让当前窗口不出标签。face 是唯一改外观的地方——~aw-leading-char-face~ 放大到 3.0 倍并继承 ~font-lock-keyword-face~（上游只给了前景色，没有高度），minibuffer 里那个保持 1.0 倍，否则它会撑破 minibuffer 高度。~aw-update~ 挂在 ~window-configuration-change~ 上，是为了让 modeline 里显示窗口路径的那一段跟着布局刷新。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-window.el
+#+begin_src emacs-lisp :tangle core/init-emacs-window.el :mkdirp yes
 ;; [ace-window] Add number for each window
 (use-package ace-window
   :straight t
@@ -4645,7 +4667,7 @@ GNU ELPA 上的选窗包。README 把它定位成 ~other-window~ 与 ~windmove-l
 
 本配置两样都留着（~tab-bar~ 在 ~init-emacs-modeline~ 里），因为两份历史记的不是一回事：winner 记当前帧的窗口配置，tab-bar 记 tab 切换。~winner-dont-bind-my-keys t~ 关掉它自带的 ~C-c <left>~ / ~C-c <right>~，而本文件没有在别处重新绑 ~winner-undo~ / ~winner-redo~（只有 ~:commands~ 让它们可自动加载），所以这两个命令目前只能 ~M-x~ 调用。~winner-boring-buffers~ 在默认的 ~("*Completions*")~ 上又加了一批临时 buffer（Help、Compile-Log、Ibuffer 之类），让 undo 不把它们的窗口当布局的一部分恢复。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-window.el
+#+begin_src emacs-lisp :tangle core/init-emacs-window.el :mkdirp yes
 ;; [winner] Restore old window configurations
 (use-package winner
   :commands (winner-undo winner-redo)
@@ -4671,7 +4693,7 @@ README 的说法是「a minor-mode to tame the flood of ephemeral windows Emacs 
 
 ~popper-mode-line~ 把默认的 ~" POP"~ 换成 ~" POP |"~，并把 ~:inverse-video~ 绑到 ~(mode-line-window-selected-p)~，于是同一段字符串在选中窗口的 modeline 上反色、别的窗口上不反色；~popper-echo-mode~ 打开后，做 popup 相关动作时 echo area 会按循环顺序列出 popup 名字。键位上 ~C-M-<tab>~ 是 ~popper-cycle~、~M-`~ 是 ~popper-toggle-type~，模式本身挂在 ~emacs-startup~ 上而不是 ~after-init~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-window.el
+#+begin_src emacs-lisp :tangle core/init-emacs-window.el :mkdirp yes
 ;; [popper] Enforce rules for popup windows like *Help*
 (use-package popper
   :straight t
@@ -4776,7 +4798,7 @@ README 的原话是「enforcing a fixed and automatic balanced layout where the 
 
 ~zoom-ignored-major-modes~（默认空）列出的 mode，其窗口只参与均分、不参与放大。配套的三条 hook 才是真正的例外机制：~vundo~ 固定尺寸、~speedbar~ 只固定宽度、~ediff~ 只固定高度，各自设 buffer-local 的 ~window-size-fixed~。不在 zoom 里加例外配置，是因为尺寸约束该由那个 buffer 自己声明——~init-emacs-tools~ 里 speedbar 那一节说的就是同一件事。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-window.el
+#+begin_src emacs-lisp :tangle core/init-emacs-window.el :mkdirp yes
 ;; [zoom] Managing the window sizes automatically
 (use-package zoom
   :straight t
@@ -4802,7 +4824,7 @@ README 的原话是「enforcing a fixed and automatic balanced layout where the 
 
 把 ~init-emacs-window~ 记进 ~features~，模块到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-window.el
+#+begin_src emacs-lisp :tangle core/init-emacs-window.el :mkdirp yes
 (provide 'init-emacs-window)
 #+end_src
 
@@ -4820,7 +4842,7 @@ README 的原话是「enforcing a fixed and automatic balanced layout where the 
 
 macOS 分支只做一件事：有 GNU ~gls~ 就把它设成 ~insert-directory-program~，没有就关掉 ~dired-use-ls-dired~ 以消掉 ~ls does not support --dired~ 的告警。后面那条 ~when~ 决定 ~dired-listing-switches~：只有在非 macOS、或者 macOS 上装了 ~gls~ 时才敢用 ~--group-directories-first~（GNU ls 的选项），并把 ~ls-lisp-use-insert-directory-program~ 打开，让上面那个程序而不是 ls-lisp 来列目录。默认的 ~-al~ 换成 ~-alh --group-directories-first~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-dired.el
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; [dired] File manager
@@ -4859,7 +4881,7 @@ README 一句话：「a minor mode which shows git information inside the dired 
 
 两条都是改默认值：~dgi-commit-message-format "%h %cs %s"~（默认 ~"%s\t%cr"~，这里换成「短 hash + 提交日期 + 标题」三列）、~dgi-auto-hide-details-p nil~（默认 t，开时不自动隐藏 dired 的细节行）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-dired.el
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
 ;; [dired-git-info] Show git info in dired
 (use-package dired-git-info
   :straight t
@@ -4877,7 +4899,7 @@ dired 的「另一半命令」都住在这里：复制、改名、压缩、调�
 
 两条设置都是改动：~dired-create-destination-dirs 'ask~（默认 nil，目标目录不存在时先问，而不是直接失败）、~dired-vc-rename-file t~（默认 nil，版本控制下的文件改名走 ~vc-rename-file~，于是记录成 rename 而不是删除加新增）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-dired.el
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
 ;; [dired-aux] Extra Dired functionality
 (use-package dired-aux
   :after dired
@@ -4893,7 +4915,7 @@ dired 的「另一半命令」都住在这里：复制、改名、压缩、调�
 
 三条设置都是改动：~dired-omit-files "^\\..*\\'"~（默认只藏 ~#autosave#~ 与 ~.~ / ~..~，这里改成藏所有点开头的文件）、~dired-omit-verbose nil~（默认 t，隐藏时不刷 message）、~dired-clean-confirm-killing-deleted-buffers nil~（默认 t，目录被删掉之后杀它的 dired buffer 不再追问）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-dired.el
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
 ;; [dired-x] Extra Dired functionality
 (use-package dired-x
   :after dired
@@ -4913,7 +4935,7 @@ README：「Provide a dired-mode interface for fd's result. Same functionality a
 
 用法只有一条：~[remap find-dired]~ 到 ~fd-dired~，占的是 ~find-dired~ 的位置，不新增键。README 的 FAQ 第一条正好是 macOS 的 ~ls --quoting-style=literal~ 不支持，建议装 coreutils——上一节 dired 的 ~gls~ 分支就是这一条的落点。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-dired.el
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
 ;; [fd-dired] Using `fd' with `find-dired'
 (use-package fd-dired
   :straight t
@@ -4928,7 +4950,7 @@ README 的定位：「Collection of useful dired additions… splitting all the 
 
 ~f~ 是被 ~dired-collapse~ 依赖的（=dired-collapse.el= 直接 ~require~ 它），代码里带一条 ~TODO: remove it~，说明作者认为它迟早能去掉。~dired-collapse~ 把只有单条子链的目录折叠成一行，~dired-collapse-fontify nil~（默认 t）关掉阴影 overlay——同样因为它拖进硬编码颜色，而不是跟随主题。~dired-narrow~ 给 ~;~ 绑 ~dired-narrow-fuzzy~，按输入增量过滤当前列表。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-dired.el
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
 ;; [dired-hacks] Several additional extensions for dired
 (use-package dired-hacks
   :straight (:host github :repo "roife/dired-hacks" :branch "fix/collapse-subtree")
@@ -4966,7 +4988,7 @@ README：「~dired-collapse~-style folding for ~find-file~ completion」——�
 
 用法只有 ~:hook (after-init . ffx-mode)~。判断链的条件也是 README 写的：忽略 ~.~、~..~ 与 ~dired-omit-files~ 命中的条目之后，每一层都必须恰好一个条目且是目录，一旦出现文件或分支就停——所以它和 ~dired-omit-mode~ 的隐藏规则是共用的。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-dired.el
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
 ;; [ffx] `dired-collapse'-style folding for file-name completion.
 ;; When a directory holds a single sub-directory chain (ignoring the same
 ;; entries `dired-omit-mode' hides), offer an extra candidate that jumps
@@ -4983,7 +5005,7 @@ README：「~dired-collapse~-style folding for ~find-file~ completion」——�
 
 README：「Extra font lock rules for a more colourful dired」——把 Drew Adams 的 ~dired+~ 里那批额外 font-lock 规则单独发布出来。本配置挂在 ~dired-mode~ 上开 ~diredfl-mode~，用的是 per-buffer 的那个模式，而不是 README 也提到的全局版 ~diredfl-global-mode~：dired buffer 才是它唯一的作用对象，没必要全局兜着。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-dired.el
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
 ;; [diredfl] Make dired colorful
 (use-package diredfl
   :straight t
@@ -4996,7 +5018,7 @@ README：「automatically preview in a side window the file at point in Dired bu
 
 三条设置都是改默认值，方向一致——少打扰、少花钱：~dired-preview-trigger-on-start nil~（默认 t，进入 dired 时不立刻预览第一个文件）、~dired-preview-max-size~ 抬到 10MB（默认 1MB，更大的文件不预览）、~dired-preview-delay 0.5~ 秒（默认 0.7，point 停半秒才预览）。~V~ 也绑到 ~dired-preview-mode~，需要时可以整 buffer 开关。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-dired.el
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
 ;; [dired-preview] Preview the file at point
 (use-package dired-preview
   :straight t
@@ -5012,7 +5034,7 @@ README：「automatically preview in a side window the file at point in Dired bu
 
 把 ~init-emacs-dired~ 记进 ~features~，模块到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-dired.el
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
 (provide 'init-emacs-dired)
 #+end_src
 
@@ -5032,7 +5054,7 @@ README：「automatically preview in a side window the file at point in Dired bu
 
 另两条 hook 一件限流、一件上色：~+compilation--truncate-buffer-h~ 只在 buffer 超过 80 × ~comint-buffer-maximum-size~ 时才调 ~comint-truncate-buffer~（临时抬高 GC 阈值、~with-silent-modifications~），~+compilation--colorize-h~ 把 ANSI 转义按 region 上色。三条设置都是改动：~compilation-always-kill t~（默认 nil，重新编译前先杀旧进程）、~compilation-ask-about-save nil~（默认 t，编译前静默保存）、~compilation-scroll-output 'first-error~（默认 nil，滚到第一个错误就停）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; [compile]
@@ -5201,7 +5223,7 @@ Diagnostics for all files are published separately for project listings."
 
 一行设置，不属于任何包。~comment-empty-lines~ 的 docstring 说它管的是 ~comment-region~：nil 时空行不被注释，t 时总被注释，~eol~ 时只在注释以行尾结束时才注释空行。这里设成 t，于是用 ~M-;~ / ~comment-region~ 框一段代码时，中间的空白行也会带上注释起始符，整块看起来是一体的。代码里用 ~[comment]~ 这个分组注释标着它。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [comment] comment over empty lines
 (setq comment-empty-lines t)
 #+end_src
@@ -5214,7 +5236,7 @@ Diagnostics for all files are published separately for project listings."
 
 另有一条 advice：~find-function~、~consult-imenu~、~consult-ripgrep~、~citre-jump~ 这四个命令调用前先把 point 压进标记栈。它们都会跳走却不记栈，补上这一步 ~xref-go-back~ 才回得来。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [xref] Cross reference
 (use-package xref
   :init
@@ -5242,7 +5264,7 @@ Diagnostics for all files are published separately for project listings."
 
 最后两件是接管关系：~eglot-stay-out-of 'flymake-diagnostic-functions~ 禁止 eglot 反过来改 buffer-local 的 backend 列表；~+eglot-managed-mode-h~ 在 eglot 开始管理时把 ~eglot-flymake-backend~ 加进 buffer-local 的 ~flymake-diagnostic-functions~，并把 eldoc 换成 ~eldoc-documentation-compose-eagerly~ 且关掉 ~eldoc-mode~（eagerly 策略自己会拉文档，不需要 eldoc 的空闲定时器）；停止管理时把这些撤掉，再让 flymake 重跑一次。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [Eglot] LSP support
 (use-package eglot
   :straight (:type built-in)
@@ -5329,7 +5351,7 @@ README：「Simple shim adapter to use the tempel templating library with eglot,
 
 本配置本来就用 ~tempel~（~init-emacs-completion~ 那一节），没有装 yasnippet，所以这条冲突不存在。用法就一句 ~(eglot-tempel-mode 1)~，~:after (eglot tempel)~ 保证两边都就绪——服务器给的 snippet 从此按 tempel 的语法展开，与其它地方按 ~TAB~ 展开模板是同一套手感。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 (use-package eglot-tempel
   :straight t
   :after (eglot tempel)
@@ -5343,7 +5365,7 @@ README：「Simple shim adapter to use the tempel templating library with eglot,
 
 四条设置里两条是默认值：~eldoc-echo-area-display-truncation-message t~（默认 t，被截断时说明截断了）、~eldoc-help-at-pt t~（docstring：它是 ~help-at-pt-display-when-idle~ 的替代品，把 ~help-at-pt-kbd-string~ 交给 eldoc 显示）。两条是改动：~eldoc-echo-area-prefer-doc-buffer t~（默认 nil，有文档 buffer 时优先弹 buffer 而不是挤在 echo area）、~eldoc-echo-area-use-multiline-p nil~（默认 ~truncate-sym-name-if-fit~，这里完全不要多行 echo area）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [Eldoc]
 (use-package eldoc
   :bind (("C-h h" . eldoc))
@@ -5358,7 +5380,7 @@ README：「Simple shim adapter to use the tempel templating library with eglot,
 
 内置的帮助系统。这里只做一件事：~s-?~ 绑 ~display-local-help~，它的 docstring 说得很具体——显示 point 上 ~kbd-help~ 或 ~help-echo~ 文本产生的那条消息。也就是把「这里有什么键」的信息手动叫出来一次，而不是等它自己弹。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [help]
 (use-package help
   :bind (("s-?" . display-local-help)))
@@ -5370,7 +5392,7 @@ README：「A consulting-read interface for eglot… provides a front-end interf
 
 用法只有一条键：在 ~eglot-mode-map~ 里把 ~xref-find-apropos~ 重映射到 ~consult-eglot-symbols~。~:after consult eglot~ 保证两边都在，于是 eglot 管着的 buffer 里「按名字找符号」直接走服务器。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [consult-eglot] Eglot support for consult
 (use-package consult-eglot
   :after consult eglot
@@ -5385,7 +5407,7 @@ README：「This mode allows to paste whole buffers or parts of buffers to paste
 
 两条改动、一条默认值：~webpaste-paste-confirmation t~（默认 nil，贴之前先确认——内容要离开本机，这一步不该省）、~webpaste-provider-priority '("paste.rs")~（默认空表表示按内置顺序试所有 provider，这里只留一个，于是没有 failover 了，这是有意的取舍：宁可不贴，也不悄悄换到别的站点）、~webpaste-add-to-killring t~ 是默认值（贴完把 URL 放进 kill-ring）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [webpaste] Web Pastebin
 (use-package webpaste
   :straight t
@@ -5401,7 +5423,7 @@ README 的定位：「jump to definition and find references… that favors "jus
 
 本配置把它挂到 ~xref-backend-functions~ 上，位置是「没有 LSP 时的兜底」，同时它也是 ~citre~ 后端队列里的最后一环（下一节）。四条设置里一条默认值、三条改动：~dumb-jump-selector 'completing-read~ 是默认值；~dumb-jump-prefer-searcher 'rg~（默认 nil 即自动选，这里写死 rg）、~dumb-jump-aggressive t~（默认 nil，放宽候选）、~dumb-jump-default-project nil~（默认是 ~"~"~。docstring 说它是「找不到项目根时的搜索目录」，而 ~dumb-jump-get-project-root~ 的最后一步是 ~(expand-file-name dumb-jump-default-project)~，所以设成 nil 不是「关掉兜底」：在既没有 ~.dumbjump~ 也没有 ~project-current~ 根的目录里，这个函数直接报 ~wrong-type-argument stringp nil~（batch 实测，把 ~dumb-jump-xref-activate~ 挂进 ~xref-backend-functions~ 后调 ~xref-find-backend~ 同样报错），效果是「不在项目里就报错」而不是「在整个 home 里搜」）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [dumb-jump] Jump to definition (integrated with xref, a fallback of lsp)
 (use-package dumb-jump
   :straight t
@@ -5422,7 +5444,7 @@ README 的开头：作者自述它「started out as a tool utilizing tags files 
 
 其余设置：~citre-default-create-tags-file-location 'global-cache~（默认 nil，tags 文件生成到全局缓存而不是项目根）、~citre-edit-ctags-options-manually t~ 是默认值（生成前手工确认 ctags 选项）、~citre-auto-enable-citre-mode-modes '(prog-mode)~（默认 ~all~，只在这些 mode 里自动开）；~citre-enable-capf-integration t~ 是默认值的复述，而 ~citre-enable-xref-integration nil~（默认 t，用 ~setq-default~ 改）是有意的——让 citre 走自己的 CAPF，不去全局替换 xref。三个 ~with-eval-after-load~ 只在对应 mode 真的加载后才 ~require~ 对应的语言支持文件，避免把 ctags 相关的东西一次全拉进来。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [citre] Ctags-infra
 (use-package citre
   :straight t
@@ -5453,7 +5475,7 @@ README：「quickrun.el is Emacs port of quickrun.vim… a extension to execute 
 
 绑 ~C-c r r~ 到 ~quickrun~，~quickrun-focus-p nil~（默认 t）是不把焦点挪到输出 buffer——跑一次通常只是想看有没有报错，不想离开正在编辑的位置。这个 ~C-c r~ 前缀本身属于 ~init-emacs-edit~ 的 ~substitute~（理由写在那里），本节只是它的消费者之一，另一个是上一节 ~citre~ 的 ~C-c r c~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [quickrun] Run commands quickly
 (use-package quickrun
   :straight t
@@ -5468,7 +5490,7 @@ README：「~Dape~ is a debug adapter client for Emacs. The debug adapter protoc
 
 两条设置都短：~dape-buffer-window-arrangement 'right~（默认 ~left~，调试界面开在右侧，左侧留给源码）、~dape-start-hook~ 上挂 ~save-some-buffers~（开始调试前先把该存的文件存掉——调试器读的是磁盘上的文件，不是 buffer）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [dape] Debug Adapter Protocol client
 (use-package dape
   :straight t
@@ -5489,7 +5511,7 @@ README：「~Dape~ is a debug adapter client for Emacs. The debug adapter protoc
 
 那条 ~:filter-args~ advice 是为 Emacs 31 加的：~flymake-show-buffer-diagnostics~ 的签名是 ~(fn &optional DIAGNOSTIC)~，只接一个诊断，而 31.1 的交互式形式会把 point 上的每个诊断当成一个独立参数传进来，于是过滤器把参数截到一个。这是版本差异的补丁，不是配置偏好。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [flymake] On-the-fly syntax checker
 (use-package flymake
   :straight (:type built-in)
@@ -5531,7 +5553,7 @@ README：「This package provides fast, flexible indentation guide bars in Emacs
 
 这块开头那几行是技术性的一步，不是外观：把 ~indent-bars-display~ 记进 ~text-property-default-nonsticky~，否则终端上的显示属性会漏进新插入的文本（代码注释原话）。其余是外观，且绝大多数是把默认值往「更细更淡」调：~indent-bars-display-on-blank-lines nil~（默认 t，空行不画）、~indent-bars-depth-update-delay 0.15~（默认 0.075）、~indent-bars-width-frac 0.1~（默认 0.25）、~indent-bars-color~ 的 ~:blend~ 从 0.325 降到 0.2、~indent-bars-highlight-current-depth nil~（默认 ~(:pattern ".")~，不再高亮当前层）、~indent-bars-pattern "."~（默认 ~" . . ."~，改成每格一个点）。~indent-bars-zigzag nil~ 是默认值。最后 ~enable-theme-functions~ 上挂 ~indent-bars-reset~，换主题后重画竖线。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [indent-bars] Show indent guides
 (use-package indent-bars
   :straight (indent-bars :type git :host github :repo "jdtsmith/indent-bars")
@@ -5558,7 +5580,7 @@ README：「A GNU Emacs library which uses the direnv tool to determine per-dire
 
 用法只有 ~:hook (emacs-startup . envrc-global-mode)~。于是每个 buffer 的进程环境来自它所在目录的 ~.envrc~，跨项目跑 linter、编译器时各用各的版本。代码的分组注释写的是 ~[direnv]~，~use-package~ 的名字是 ~envrc~——两者指的是同一个包。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [direnv] Buffer-local project environments
 (use-package envrc
   :straight t
@@ -5571,7 +5593,7 @@ README：「Logview major mode for Emacs provides syntax highlighting, filtering
 
 这里的用法正是照着这个形状写的一套 CI 日志规则：~logview-additional-level-mappings~ 定义五级（~ERROR~、~WARN~、~INFO~、~DEBUG~、~TRACE~；其中 ~WARN~、~INFO~、~DEBUG~ 后面跟着补位空格，因为原日志里它们是五字符定宽字段），~logview-additional-submodes~ 给一条 ~[TIMESTAMP] [LEVEL] [NAME] MESSAGE~ 的格式并引用上面那组 level。两个变量的默认值都是 nil，所以这是纯新增；docstring 说自定义的 level mapping 与 submode 优先于内置的 ~logview-std-level-mappings~ / ~logview-std-submodes~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;; [log-view-mode]
 (use-package logview
   :straight t
@@ -5595,7 +5617,7 @@ README：「Logview major mode for Emacs provides syntax highlighting, filtering
 
 ~restart-eglot-and-switch-logs~ 按项目名拼出 eglot 的事件 buffer 名字（=*EGLOT (<项目>/(rust-ts-mode rust-mode)) events*=）：那个 buffer 已经显示在某个窗口就复用，否则右侧新开一个；然后 ~call-interactively~ 走一遍 ~eglot~ 重启，切到日志窗口、杀掉旧日志、再切回来。这两条都是「在没有 UI 的地方补一个入口」。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 (defun cargo-xtask-install-server ()
@@ -5640,7 +5662,7 @@ README：「Logview major mode for Emacs provides syntax highlighting, filtering
 
 把 ~init-emacs-prog~ 记进 ~features~，模块到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-prog.el
+#+begin_src emacs-lisp :tangle core/init-emacs-prog.el :mkdirp yes
 (provide 'init-emacs-prog)
 #+end_src
 
@@ -5665,7 +5687,7 @@ README：「Logview major mode for Emacs provides syntax highlighting, filtering
 ~(c-set-offset 'case-label '+)~ 把 ~case~ 的偏移设成 ~+~，于是 ~case~ 与 ~switch~ 同列——GNU
 默认再缩两级，K&R 风格下那一级是多余的。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 ;; Langs
 (use-package cc-mode
@@ -5682,7 +5704,7 @@ csv/tsv 当表格编辑（按字段移动、对齐列、排序）。
 本配置只写 ~:straight t~，没有任何设置。它的价值是给这类文件一个正经 mode 并自带对齐命令；
 ~rainbow-csv~ 也以它为依赖。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package csv-mode
   :straight t)
 #+end_src
@@ -5696,7 +5718,7 @@ README 给的用法是手动 ~M-x rainbow-csv-mode~，或者挂到 ~csv-mode-hoo
 ~M-x rainbow-csv-mode~。写清楚这一点，是因为这里「装了」不等于「开着」——全文没有第二处
 打开它。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package rainbow-csv
   :straight (:host github :repo "emacs-vs/rainbow-csv"))
 #+end_src
@@ -5709,7 +5731,7 @@ README.org 自称是 Emacs 里的 compiler-explorer（godbolt）：把当前 buf
 这里只有 ~:straight t~：用它的内置 starter 与默认命令 ~rmsbolt-compile~，没有指定编译器路径，
 所以实际调哪个编译器由 starter 决定。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package rmsbolt
   :straight t)
 #+end_src
@@ -5722,7 +5744,7 @@ imenu、两个缩进变量与基本补全。
 recipe 用 ~:files ("*.el")~ 只取 elisp（上游仓库里还有 Makefile、README 与 test/）；此外无设置——
 LLVM IR 在本机是偶尔读，高亮加 imenu 就够。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package llvm-mode
   :straight (:host github :repo "nverno/llvm-mode" :files ("*.el")))
 #+end_src
@@ -5736,7 +5758,7 @@ README 只有一句「fish 脚本的 major mode，详情见 =fish-mode.el=」；
 负责，而它的默认映射表里本来就有 ~(fish-mode . fish-indent)~，所以 fish 脚本照样会被
 ~fish_indent~ 整理，只是触发点在 apheleia 而不是这个 mode 自己。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package fish-mode
   :straight t)
 #+end_src
@@ -5748,7 +5770,7 @@ Enter 绑成 ~newline-and-indent~（与 python-mode 不同），要这个行为�
 
 本配置接受这个默认，只 ~:straight t~：多行输入的缩进留给手，mode 不擅自补。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package yaml-mode
   :straight t)
 #+end_src
@@ -5759,7 +5781,7 @@ README.mkdn：TOML 的语法高亮。版本停在 v0.1.3，作者在第一句里
 
 只 ~:straight t~，不设变量：写 ~Cargo.toml~ 这类文件时高亮足够，缩进按 mode 默认走。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package toml-mode
   :straight t)
 #+end_src
@@ -5772,7 +5794,7 @@ README：OCaml 的 major mode，负责高亮、缩进、在 Emacs 里跑 topleve
 unspecified~。原因在代码注释里——默认继承 ~default~ 会把 Org 源码块的背景色盖掉，于是 Org 文件里
 贴 OCaml 代码时块背景与正文不一致。这是本模块唯一与缩进无关、纯显示的一处。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package tuareg
   :straight t
   ;; Inheriting `default' would override the background of Org source blocks.
@@ -5785,7 +5807,7 @@ unspecified~。原因在代码注释里——默认继承 ~default~ 会把 Org �
 Emacs 自带的 JavaScript mode（=js.el=，同时也提供 ~js-ts-mode~）。本配置不安装，只把
 ~js-indent-level~ 从默认的 4 改成 2。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package js
   :config
   (setq js-indent-level 2))
@@ -5796,7 +5818,7 @@ Emacs 自带的 JavaScript mode（=js.el=，同时也提供 ~js-ts-mode~）。�
 内置的 CSS mode（同时提供 ~css-ts-mode~）。这里只把 ~css-indent-offset~ 从默认的 4 改成 2，
 与上面的 ~js-indent-level~ 一致——写 HTML 模板时两段缩进一样宽，混排看起来才是一块。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package css-mode
   :config
   (setq css-indent-offset 2))
@@ -5812,7 +5834,7 @@ treesit，键位与命令仍是 rust-mode 的）；~rust-format-goto-problem nil
 跳到出错位置」（默认 t，改动：只留 message，不抢光标）；~dtrt-indent~ 的映射表里把 rust-mode 的缩进
 来源改成 ~rust-ts-indent-offset~，与上面的派生对齐——不再猜缩进，用 treesit 算出来的值。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package rust-mode
   :straight t
   :init
@@ -5832,7 +5854,7 @@ README：给一段 Rust 代码开本地 playground（go-playground 的 Rust 移�
 ~rust-playground-basedir~ 指到 no-littering 的 var 目录，并在加载时先 ~make-directory~ 建好
 （幂等，保证第一次用时目录已经存在），而不是让它落在上游默认的位置。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package rust-playground
   :straight t
   :init
@@ -5850,7 +5872,7 @@ README 是中文的：在 Emacs 里直接编辑、渲染、运行 ~.ipynb~，界
 recipe 指向 =roife/jupyter.el=；~:mode~ 接管 ~.ipynb~，~:commands~ 让 ~jupyter-notebook-new~ 延迟
 加载，~jupyter-notebook-formula-scale 2.0~ 把公式预览放大到两倍（默认 nil，即用 Emacs 的常规缩放）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package jupyter-notebook
   :straight (:type git :host github :repo "roife/jupyter.el")
   :mode ("\\.ipynb\\'" . jupyter-notebook-mode)
@@ -5869,7 +5891,7 @@ recipe 指向 =roife/jupyter.el=；~:mode~ 接管 ~.ipynb~，~:commands~ 让 ~ju
 两点如实写明：~verilog-auto-save-policy~ 的默认值本来就是 nil，这里只是把「保存时不自动更新
 AUTO」写在明处；~:straight (:type built-in)~ 表示不安装，用 Emacs 自带那份。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (use-package verilog-mode
   :straight (:type built-in)
   :config
@@ -5900,7 +5922,7 @@ README：编辑 Nix 表达式的 major mode，语法高亮加 SMIE 缩进，另�
 只写 ~:mode "\\.nix\\'"~ 与 ~:straight t~：本机读改 Nix 文件的场合不多，mode 自带的 SMIE
 缩进已经够用。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 ;; [nix]
 (use-package nix-mode
   :straight t
@@ -5914,7 +5936,7 @@ README：编辑 Graphviz DOT 文件，并且能在 Emacs 里调 graphviz 把图�
 只设 ~graphviz-dot-indent-width 4~（默认是 ~standard-indent~，通常也是 4；写成字面量是为了不受
 ~standard-indent~ 变动影响）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 ;; [graphviz-dot]
 (use-package graphviz-dot-mode
   :straight t
@@ -5932,7 +5954,7 @@ README：编辑「HTML 里嵌 CSS/JS/模板块」这类文件的 major mode，�
 ~web-mode-enable-html-entities-fontification~（实体上色）与 ~web-mode-auto-close-style 1~
 （默认已是 1，含义是只在 =</= 处自动补全结束标签；写明是因为它决定敲完标签会不会多出半截）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 ;; Major mode for editing web templates
 (use-package web-mode
   :straight t
@@ -5977,7 +5999,7 @@ tree-sitter 支持的构建静默跳过这一段。
 生效的 ts 路径只有 ~rust-mode~ 的派生开关（见上文）。要让它真的生效，把它改成 ~setopt~ 即可——
 这是设置方式问题，不是变量语义问题。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 ;; [treesit]
 (use-package treesit
   :when (treesit-available-p)
@@ -5990,7 +6012,7 @@ tree-sitter 支持的构建静默跳过这一段。
 
 把 ~init-emacs-langs~ 记进 ~features~，模块到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-langs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-langs.el :mkdirp yes
 (provide 'init-emacs-langs)
 #+end_src
 
@@ -6013,7 +6035,7 @@ README：让 ~visual-line-mode~ 的软换行折在 ~fill-column~（或 ~visual-f
 打开 ~visual-fill-column-mode~——真正打开它的是 telega（在自己的 chat buffer 里开），而 ~init-emacs-web~
 又立刻在 telega chat 里把它关掉；所以这条设置的现状是「给别处打开时用的默认值」。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; [visual-fill-column] Center text in markdown and org
@@ -6031,7 +6053,7 @@ README：让 ~visual-line-mode~ 的软换行折在 ~fill-column~（或 ~visual-f
 顺序上这一行在 ~visual-fill-column~ 之后，而上一节的居中设置是 ~setq-default~，所以无论哪个 hook
 先跑，居中值都已经就位。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 ;; [visual-line-mode] Soft line-wrapping
 (add-hook! (org-mode-hook markdown-ts-mode-hook) #'visual-line-mode)
 #+end_src
@@ -6044,7 +6066,7 @@ README：在中英文之间自动补一个视觉空格（名字来自 pangu.js�
 minor mode，上游另有一个 ~global-pangu-spacing-mode~；全文没有第二处提到它，所以现状是包被装上、
 mode 从没打开，显示上不会有任何变化。要用得自己开一次 ~M-x global-pangu-spacing-mode~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 ;; [pangu] Add pangu spaces
 (use-package pangu-spacing
   :straight t)
@@ -6066,7 +6088,7 @@ Emacs 31 自带的 Markdown major mode，基于 tree-sitter（解析两个语法
 并把权重设成 ~unspecified~。上游这六个 face 全都继承 ~font-lock-function-name-face~ 且加粗
 （batch 实测），层级因此看不出来；改成继承 Org 之后层级可辨，而且跟着当前主题走。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 (use-package markdown-ts-mode
   :straight (:type built-in)
   :mode (("\\.md\\'" . markdown-ts-mode)
@@ -6100,7 +6122,7 @@ README：在 ~markdown-ts-mode~ 的围栏代码块里执行代码，做法是把
 这里只用 ~:hook (markdown-ts-mode . md-babel-mode)~ 打开 minor mode；于是 ~init-emacs-org~ 里配好的那些
 Babel 语言（含 ~ob-mermaid~）自动成为 Markdown 代码块的后端，不需要第二套配置。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 ;; [md-babel] Execute Markdown fenced blocks through Org Babel
 (use-package md-babel
   :straight (:host github :repo "roife/md-babel")
@@ -6117,7 +6139,7 @@ README：Typst 的 tree-sitter major mode（最低 Emacs 29）。上游已迁到
 （默认是空串）。下一行 ~make-directory~ 严格说冗余——上游 ~typst-ts-lsp-download-binary~ 自己会先
 建父目录——但它是幂等的，留着表示「这个目录属于本配置的 var 树」。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 ;; [typst-ts-mode]
 (use-package typst-ts-mode
   :straight (:host sourcehut :repo "meow_king/typst-ts-mode")
@@ -6142,7 +6164,7 @@ AUCTeX 的 README 说它提供的是编辑、编译、预览 TeX 文档的一整
 server 策略，不想让 AUCTeX 再起一个。交互上三处：~TeX-electric-sub-and-superscript t~ 让上下标自动
 补花括号（默认 nil），~TeX-save-query nil~ 编译前不再问要不要保存（默认 t）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 ;; [auctex]
 (use-package tex
   :straight auctex
@@ -6170,7 +6192,7 @@ server 策略，不想让 AUCTeX 再起一个。交互上三处：~TeX-electric-
 这里只 ~:straight t~，没有 ~:hook~、也没有绑键，所以它不会自动打开；要用时在 LaTeX buffer 里
 ~M-x cdlatex-mode~。它的键位以 TAB 为主，是否常开属于个人取舍，本配置没有替你决定。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 ;; [cdlatex]
 (use-package cdlatex
   :straight t)
@@ -6184,7 +6206,7 @@ server 策略，不想让 AUCTeX 再起一个。交互上三处：~TeX-electric-
 这里只有这一行声明：没有开 ~reftex-mode~，也没有设 ~reftex-default-bibliography~。实际用法是在
 LaTeX buffer 里 ~M-x reftex-mode~（或走 AUCTeX 的菜单）——「装了不等于开着」，写清楚免得误会。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 ;; [reftex]
 (use-package reftex
   :straight (:type built-in))
@@ -6198,7 +6220,7 @@ README：编辑 Mermaid 图的 major mode（流程图、时序图的语法高亮
 只设 ~mermaid-output-format ".svg"~（默认 ~.png~，改动）：SVG 在 Org 里直接可看、缩放不糊。
 它与 ~init-emacs-org~ 的 ~ob-mermaid~ 是两条路——这里编辑独立的 ~.mmd~ 文件，那边执行 Org 源码块。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 (use-package mermaid-mode
   :straight t
   :config
@@ -6209,7 +6231,7 @@ README：编辑 Mermaid 图的 major mode（流程图、时序图的语法高亮
 
 把 ~init-emacs-writing~ 记进 ~features~，模块到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-writing.el
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
 (provide 'init-emacs-writing)
 #+end_src
 
@@ -6233,7 +6255,7 @@ refile、capture、agenda）在 ~init-emacs-agenda~。所以这里几乎全是�
 这条设置的实际份量在下一节：~org-latex-preview-cache 'persist~ 把 LaTeX 预览图交给 org-persist
 缓存，所以这个目录决定了预览图落在哪。它同时也是 ~org-element~ 的依赖（见下）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-org.el
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; [org-persist]
@@ -6288,7 +6310,7 @@ dvisvgm 时也是它）、~org-latex-preview-appearance-options~ 的 ~:scale 1.2
 ~org-emphasis-regexp-components~ 的边界放宽到包含 ~[:nonascii:]~，否则中文紧贴 ~=...=~ 时强调不
 生效；改完必须再调 ~org-set-emph-re~ 才会重建 ~org-emph-re~，所以末尾那一行不是重复。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-org.el
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
 ;; [org]
 (use-package org
   :straight t
@@ -6482,7 +6504,7 @@ Org 的语法解析器：把 buffer 解析成语法对象（~org-syntax.html~ �
 因为它依赖 Org 已定义的结构；这也是本模块里唯一一处非写不可的加载顺序，其余包（~ox~、~org-modern~、
 ~ob-mermaid~）谁先谁后都无所谓。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-org.el
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
 ;; `org-element' and its `org-persist' dependency need Org loaded first.
 (use-package org-element
   :straight nil
@@ -6499,7 +6521,7 @@ README.org：用 org-mode + org-babel + mermaid-cli 生成 mermaid 图；要求 
 （~mermaid/config.json~），让 mmdc 的配置文件不散落在项目里。~:require-incrementally t~ 与
 ~:after org~ 表示等 Org 就位再按需加载，不在启动时拖它。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-org.el
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
 ;; [ob-mermaid] Generate Mermaid diagrams through Org Babel
 (use-package ob-mermaid
   :straight t
@@ -6523,7 +6545,7 @@ README.org：让 Org 里被隐藏的部分（强调标记、链接等）在光�
 是默认值，写明是因为它决定了「只要光标在里面就显示」而不是只在编辑命令后显示。代码注释还说明：
 ~init-modal~ 没有加载，所以这段与 Meow 无关。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-org.el
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
 ;; [org-appear] Make invisible parts of Org elements appear visible.
 ;; `init-modal' is not loaded, so this does not depend on Meow.
 (use-package org-appear
@@ -6547,7 +6569,7 @@ README.org：光标进入 LaTeX 片段时关掉预览、离开时再打开，等
 只匹配 LaTeX element，所以不受 ~org-typst-preview~ 的 keymap remap 影响——Typst 公式进出 point 时
 它不接管，这正是它被单独注释说明的原因。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-org.el
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
 ;; [org-fragtog] Toggle LaTeX fragment previews when point enters or leaves.
 ;; It calls `org-latex-preview' directly, so it does not follow
 ;; `org-typst-preview''s keymap remap, and it only matches LaTeX elements.
@@ -6566,7 +6588,7 @@ README.org：用 font-lock 与 text properties 给 Org buffer 上「现代样式
 ~org-modern-star 'replace~（默认 ~fold~，即用折叠指示符替代星号）+ ~org-modern-replace-stars
 "◉○◈◇✳"~，于是层级靠字符区分，而不是靠「有没有折叠」这个状态。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-org.el
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
 (use-package org-modern
   :straight t
   :require-incrementally t
@@ -6589,7 +6611,7 @@ README.org：用 font-lock 与 text properties 给 Org buffer 上「现代样式
 ~sec-1~ 这类编号，交叉引用才稳定）、~org-export-with-latex t~（默认即 t，写明的意思是导出时保留
 LaTeX 片段而不是丢掉）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-org.el
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
 ;; [ox]
 (use-package ox
   :config
@@ -6609,7 +6631,7 @@ README.org：用与 ~org-latex-preview~ 相同的界面渲染原生 Typst 公式
 图片目录挪到 no-littering 的 var 下。它按 README 的说明重绑了 ~C-c C-x C-l~ 这一组键，因此同一个
 按键对 LaTeX 与 Typst 都管用——这也是上一节 ~org-fragtog~ 要单独解释自己为什么不受影响的原因。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-org.el
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
 ;; [org-typst-preview] Render native Typst formulae asynchronously.
 (use-package org-typst-preview
   :straight (:host github :repo "roife/org-typst-preview")
@@ -6626,7 +6648,7 @@ README.org：用与 ~org-latex-preview~ 相同的界面渲染原生 Typst 公式
 
 把 ~init-emacs-org~ 记进 ~features~，模块到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-org.el
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
 (provide 'init-emacs-org)
 #+end_src
 
@@ -6657,7 +6679,7 @@ README.org：用与 ~org-latex-preview~ 相同的界面渲染原生 Typst 公式
 收益是任何单个归档文件都不会无限长；它只在 ~buffer-file-name~ 存在时动手，临时 buffer 里的 Org
 不会被误设。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; [org] Task, project, and refile workflow shared by Agenda and Capture.
@@ -6705,7 +6727,7 @@ README.org：用与 ~org-latex-preview~ 相同的界面渲染原生 Typst 公式
 不保存就等于没做。注意这份清单与 ~org-agenda-files~、capture 模板里的落点必须同步，新增一个文件
 要改三处。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 ;; [org-refile]
 (use-package org-refile
   :hook (org-after-refile-insert . save-buffer)
@@ -6735,7 +6757,7 @@ README.org：用与 ~org-latex-preview~ 相同的界面渲染原生 Typst 公式
 是 Org 自己的；~s~ 进 someday，~e~ 进 calendar 当事件。每条都带 ~:empty-lines 1~，连续 capture
 时条目之间不会黏在一起。~org-default-notes-file~ 指向 =inbox.org=，因此 ~t~、~n~、~r~ 都不写死路径。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 ;; [org-capture]
 (use-package org-capture
   :require-incrementally (org-agenda t)
@@ -6821,7 +6843,7 @@ scheduled/deadline、todo/tags/search 块不缩进；过滤上 ~org-agenda-dim-b
 最后一条 ~:bind~ 里的 remap 指向下一节的 ~+agenda-calendar-blocks~：在 agenda 里按
 ~org-agenda-goto-calendar~ 得到的是块状周视图。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 ;; [org-agenda]
 (use-package org-agenda
   :require-incrementally t
@@ -6943,7 +6965,7 @@ t~ 在日历上标出 diary 里的条目。diary 之所以能显示 Org 内容�
 ~%%(org-diary)~——代码注释写明这一点，好处是保留 Org 自己的调度与重复语义，而不是把条目导出成
 diary 格式。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 ;; [calendar]
 (use-package calendar
   :bind (("C-c o C" . calendar)
@@ -6974,7 +6996,7 @@ calfw（用 ~get-text-property 'day~ 取日期），内容源两个：Org 与订
 ~+enable-conservative-scrolling~（来自 ~init-emacs-util~）。~calfw-org~ 与 ~calfw-ical~ 各自只写
 ~:after calfw~，没有设置。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 ;; [calfw] One calendar view for Org entries and subscribed days off/workdays.
 (use-package calfw
   :straight (:host github :repo "haji-ali/emacs-calfw")
@@ -7002,14 +7024,14 @@ calfw（用 ~get-text-property 'day~ 取日期），内容源两个：Org 与订
               '((name . hide-calendar-sources))))
 #+end_src
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 (use-package calfw-org
   :straight (:host github :repo "haji-ali/emacs-calfw"
                    :files ("calfw-org.el"))
   :after calfw)
 #+end_src
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 (use-package calfw-ical
   :straight (:host github :repo "haji-ali/emacs-calfw"
                    :files ("calfw-ical.el"))
@@ -7030,7 +7052,7 @@ README.org：给 calfw 加「时间块」视图——把带时间的日程画成
 ~+agenda-calendar-blocks~ 是 ~+agenda-calendar~ 的 ~block-week~ 包装，绑在 agenda 的
 ~[remap org-agenda-goto-calendar]~ 上。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 (use-package calfw-blocks
   :straight (:host github :repo "haji-ali/calfw-blocks")
   :after calfw-org
@@ -7088,7 +7110,7 @@ Org 的计时模块（源文件 Commentary：Org mode 的 clocking 代码）。�
 （macOS 走 ~ns-do-applescript~，Linux 走 libnotify 或 ~notify-send~），所以本配置不必为两个平台
 各写一份通知代码。计时本身不是本节的事。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 ;; [org-clock] Portable desktop notification backend.
 (use-package org-clock
   :commands (org-show-notification))
@@ -7107,7 +7129,7 @@ Org 的计时模块（源文件 Commentary：Org mode 的 clocking 代码）。�
 ~appt-display-diary nil~（默认 t，不在提醒里塞整份 diary）、~appt-audible nil~（默认 t，不响铃）、
 ~appt-delete-window-function #'ignore~（默认会去删窗口，桌面通知没有窗口可删）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 ;; [appt] Convert today's timed Org entries into desktop notifications.
 (use-package appt
   :require-incrementally (org-agenda t)
@@ -7154,7 +7176,7 @@ README：给 Org 加上最基本的番茄钟。默认是 25 分钟工作、5 分
 这里改成 30 分钟工作、15 分钟长休（短休留默认的 5），用 ~C-c o p~ 启动、对当前 entry 计时，
 所以番茄钟的记录仍然落在 Org 的 clock 里，而不是另开一套日志。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 ;; [org-pomodoro] Clock focused work sessions on the Org task at point.
 (use-package org-pomodoro
   :straight t
@@ -7169,7 +7191,7 @@ README：给 Org 加上最基本的番茄钟。默认是 25 分钟工作、5 分
 
 把 ~init-emacs-agenda~ 记进 ~features~，模块到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
+#+begin_src emacs-lisp :tangle core/init-emacs-agenda.el :mkdirp yes
 (provide 'init-emacs-agenda)
 #+end_src
 
@@ -7192,7 +7214,7 @@ README：给 Org 加上最基本的番茄钟。默认是 25 分钟工作、5 分
 已发布历史（defcustom 自己的建议是 ~ask~ 或 ~nil~）。~vc-dir-auto-hide-up-to-date 'revert~ 选的是
 中间那档：已同步/已忽略的文件只在刷新（~g~）时才从 ~vc-dir~ 列表里消失，不自动消失。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; [vc-mode] Version control interface
@@ -7214,7 +7236,7 @@ README 第一句：生成 GitHub/Bitbucket/GitLab 等仓库里当前文件与当
 它和本模块后面的 ~browse-at-remote~ 功能重叠，两个都留着是因为 git-link 的三个命令在 Dired、Magit、
 VC revision 与 Tramp 里都能用（README 明说），而 browse-at-remote 的入口是 ~C-x v~ 前缀下的一个键。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;; [git-link] Get remote repo URL for buffer location
 (use-package git-link
   :straight t
@@ -7238,7 +7260,7 @@ advice ~ws-butler-after-save~（保存后 ~ws-butler~ 会把 buffer 恢复成「
 ~after-focus-change-function~（切窗口后不同 buffer 的 diff 各自重算）、以及 ~magit-post-refresh-hook~
 （放在 ~with-eval-after-load 'magit~ 里，没装 Magit 就不挂）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;; [diff-hl] Highlight uncommitted changes using VC
 (use-package diff-hl
   :straight t
@@ -7306,7 +7328,7 @@ buffer 不显示相关 ref（很少有用，只是拖慢）、diff 用 indicator
 最后一个函数是给下一个包用的开关：~+toggle-magit-difftastic~ 通过 ~transient-append-suffix~ 往
 magit 的 diff 菜单尾部加一个 "D"，而不是另起一个入口。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;; [magit] Version control interface
 (use-package magit
   :straight t
@@ -7364,7 +7386,7 @@ recipe 指向 rschmukler 的仓库而不是 MELPA，所以装的是这个 fork�
 
 ~:after magit~ 让它等 Magit 加载后再进惰性队列；真正的加载时机是上一节的 "D" 开关第一次被按。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 (use-package magit-difftastic
   :straight (:host github :repo "rschmukler/magit-difftastic")
   :require-incrementally t
@@ -7387,7 +7409,7 @@ README：Ghub 给「从 Emacs 调各种 forge 的 API」提供基础函数（~gh
 forge 为 ~nil~/~github~ 时改道，其它 forge 交给原函数——因为这条路径只解决 GitHub 的凭据。
 本模块的 ~forge~ 与 ~remoto~ 都走它。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;; Use the GitHub CLI credential directly.  Keep the token in memory only
 ;; and fetch it lazily.
 (use-package ghub
@@ -7423,7 +7445,7 @@ such as Github and Gitlab, from the comfort of Magit」，细节都在手册里�
 在第一次用它之前就存在；这个变量是「远端没有 draft 功能时的落点」。一个 ~custom-face~ 让 topic
 label 用 variable-pitch 且小一号，是纯显示层。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 (use-package forge
   :straight t
   :require-incrementally t
@@ -7447,7 +7469,7 @@ README：把源码注释与 Org 文件里的关键字条目汇总到 Magit statu
 ~:config~ 只在包加载之后才跑，那时第一个 status buffer 可能已经画完了（这块代码本身靠
 ~:require-incrementally~ 慢慢补齐）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;; Show TODOs in magit
 (use-package magit-todos
   :straight t
@@ -7469,7 +7491,7 @@ README：注册一个基于 ~file-name-handler-alist~ 的虚拟文件系统，�
 ~remoto-github~，类型谓词对 Codeberg 也为真，用类型判断会把 GitHub 的 token 递给 Codeberg。
 注释里记了版本事实：remoto 2.5 删了 ~remoto--find-github-token~，token 现在由 ~remoto--find-token~ 读。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;; [remoto] Browse GitHub repositories without cloning
 (use-package remoto
   :straight (:host github :repo "agzam/remoto.el")
@@ -7498,7 +7520,7 @@ README：注册一个基于 ~file-name-handler-alist~ 的虚拟文件系统，�
 ~smerge-mode~ 打开时把这个 backend 加进 buffer-local 的 ~flymake-diagnostic-functions~ 并启动
 flymake。于是冲突从「看不见的文本」变成 flymake 列表里的一项。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;; [smerge] Highlight all the conflicted regions for git
 (use-package smerge-mode
   :preface
@@ -7545,7 +7567,7 @@ readme.rst：打开 github/gitlab/bitbucket/stash/git.savannah.gnu.org/sourcehut
 本配置只做一件事：把命令绑到 ~vc-prefix-map~ 的 ~B~，于是它在 ~C-x v B~ 上——放在 VC 前缀里而不是
 全局键，是因为它跟 ~C-x v~ 的其它命令一样是「对当前文件的版本控制动作」。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;; [browse-at-remote] Open github/gitlab/bitbucket page
 (use-package browse-at-remote
   :straight t
@@ -7562,7 +7584,7 @@ README：为各种 Git 配置文件提供 major mode——三个库各自 autolo
 本配置只写 ~:straight t~，没有任何设置，也没有 ~:config~：它靠 autoload 生效，打开
 ~.gitconfig~／~.gitignore~ 时 Emacs 自己会按文件名找到 mode，无需提前加载。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;; [git-modes] Git configuration major modes
 (use-package git-modes
   :straight t)
@@ -7576,7 +7598,7 @@ diff 即使开了 hunk refining 也很难读，这个包只显示改动的词和
 ~:after magit~ 加上 ~magit-diff-visit-file~ hook，于是它只在「从 magit 打开一个文件的 diff」时生效，
 是局部 minor mode，不全局开；关掉它用 ~C-- M-x abridge-diff-mode~（README 给的退出口）。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 ;; [abridge-diff]
 (use-package abridge-diff
   :straight t
@@ -7588,7 +7610,7 @@ diff 即使开了 hunk refining 也很难读，这个包只显示改动的词和
 
 ~provide~ 把 ~init-emacs-vcs~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el
+#+begin_src emacs-lisp :tangle core/init-emacs-vcs.el :mkdirp yes
 (provide 'init-emacs-vcs)
 #+end_src
 
@@ -7607,7 +7629,7 @@ diff 即使开了 hunk refining 也很难读，这个包只显示改动的词和
 它跟 ~init-emacs-window~ 的耦合在那一节：zoom 把 ~speedbar-mode~ 列进 ~zoom-ignored-major-modes~ 并给
 这个 window 设了 ~window-size-fixed 'width~，两边配合，一开 speedbar 才不会被自动平衡改宽度。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-tools.el
+#+begin_src emacs-lisp :tangle core/init-emacs-tools.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; [speedbar]
@@ -7631,7 +7653,7 @@ README.org：面向 GNU Emacs 的全能文档阅读器，支持多种主要文�
 ~USE_PKGCONFIG=yes~ 与 Home Manager 的 pkgconfig 路径递进去。删掉这段 recipe，包还在，但下次重编译
 就找不到 mupdf。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-tools.el
+#+begin_src emacs-lisp :tangle core/init-emacs-tools.el :mkdirp yes
 ;; [emureader] read docs in emacs.  The package renamed from `reader' and
 ;; its module from `render-core' to `emureader-dyn' (see its Makefile).
 (use-package emureader
@@ -7650,7 +7672,7 @@ README.org：面向 GNU Emacs 的全能文档阅读器，支持多种主要文�
 
 ~provide~ 把 ~init-emacs-tools~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-tools.el
+#+begin_src emacs-lisp :tangle core/init-emacs-tools.el :mkdirp yes
 (provide 'init-emacs-tools)
 #+end_src
 
@@ -7671,7 +7693,7 @@ djcb/mu——这就是本模块不出现 ~:straight~ 的原因。
 读进来。它们的默认值故意是 ~nil~ 而不是占位字符串，于是「没配」在代码里可判——后面 ~+mu4e-apply~
 每造一个 context 都套了一层 ~+mu4e-address-p~，地址为空就干脆不造。本文件里没有任何密码。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-mail.el
+#+begin_src emacs-lisp :tangle core/init-emacs-mail.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 ;; Local mail reader. Upstream stopped at Himalaya mode hooks and does not
@@ -7717,7 +7739,7 @@ UI 是中文也不变），因为 mu4e 是按路径同步的；~mu4e-context-pol
 哪个 context，~mu4e-compose-context-policy 'ask~ 决定写信时要不要问。另外整段 headers 的 thread 前缀
 与各类 mark 被换成 unicode/emoji，~*mu4e-update*~ 被钉在下方 10% 高度的窗口里，不抢正文。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-mail.el
+#+begin_src emacs-lisp :tangle core/init-emacs-mail.el :mkdirp yes
 (defun +mu4e-address-p (address)
   "Return non-nil when ADDRESS is a non-empty string."
   (and (stringp address) (not (string-empty-p address))))
@@ -7844,7 +7866,7 @@ Emacs default."
 找不到时它返回 ~nil~，~when-let~ 于是不 ~add-to-list~，启动照常往下走——这是本章「找不到就静默跳过」
 那半句的实现。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-mail.el
+#+begin_src emacs-lisp :tangle core/init-emacs-mail.el :mkdirp yes
 ;; `use-package' is an autoload in Emacs 31, so `fboundp' is true even
 ;; under emacs -Q. Batch tests apply the settings at load time. A normal
 ;; session defers them until `mu4e' is invoked. If the Nix output is not
@@ -7880,7 +7902,7 @@ home-manager path that the symlink points at still has both."
 设置，便于测试；正常会话用 ~use-package~ 的 ~:commands (mu4e)~ 延到第一次调用 ~mu4e~ 时才 ~require~，
 ~:config~ 里再调一次 ~+mu4e-apply~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-mail.el
+#+begin_src emacs-lisp :tangle core/init-emacs-mail.el :mkdirp yes
 (when-let ((dir (+mu4e-lisp-dir)))
   (add-to-list 'load-path dir))
 
@@ -7901,7 +7923,7 @@ home-manager path that the symlink points at still has both."
 
 ~provide~ 把 ~init-emacs-mail~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-mail.el
+#+begin_src emacs-lisp :tangle core/init-emacs-mail.el :mkdirp yes
 (provide 'init-emacs-mail)
 #+end_src
 
@@ -7923,7 +7945,7 @@ home-manager path that the symlink points at still has both."
 ~+elfeed-hn-atom~ 与 ~+elfeed-reddit-atom~ 定死文件名，~+elfeed-file-feed~/~+elfeed-hn-feed~ 拼出
 =file://= 条目，~+elfeed-feed-url~ 统一取 URL——因为列表里既有裸字符串也有 ~(url . tags)~ 对。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 (defvar +elfeed-local-dir (no-littering-expand-var-file-name "rss/")
@@ -7959,7 +7981,7 @@ home-manager path that the symlink points at still has both."
 策略是保守的：宁可漏标也不误标，所以每个正则都配了注释说明它防的是什么。
 ~+elfeed-ad-title-p~/~+elfeed-pr-title-p~ 只是把三个正则的组合写成判定函数，好在 hook 里复用。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 (defvar +elfeed-ithome-url "https://rsshub.rssforever.com/ithome/it"
   "IT之家「IT 资讯」分类源（RSSHub）。官网总 RSS 混入智车之家通稿。")
 
@@ -8012,7 +8034,7 @@ r/emacs 的 atom 是私有的、由脚本生成，可能不存在，所以注册
 它有两个调用点（~:config~ 与更新子进程的 sentinel），因为 atom 可能在一次成功的 Reddit 抓取之后才
 出现——只在一个地方调，第二个场景就会漏。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 (defun +elfeed-ensure-reddit-feed ()
   "Register the Reddit local feed when its atom file is readable.
 Safe to call repeatedly; does not duplicate entries."
@@ -8036,7 +8058,7 @@ Safe to call repeatedly; does not duplicate entries."
 ~ELFEED_HN_LLM=1~，两小时一次的后台刷新绝不自动调 Magpie，除非这个变量非 nil。默认 ~nil~ 的意思是
 「后台静默花钱」在结构上不可能发生。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 (defun +elfeed-show-window ()
   "Return a live window already showing an Elfeed entry, or nil."
   (cl-find-if (lambda (window)
@@ -8086,7 +8108,7 @@ advice 共用 ~+elfeed--update-after-local-feeds~，只有第三个参数（要�
 两个挂到 ~elfeed-new-entry-hook~ 上的打标函数，以及一个给已有条目补标的一次性命令
 ~+elfeed-backfill-promo-tags~。db 与 enclosure 目录交给 no-littering，并把这两棵树排除出 recentf。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 ;; [elfeed] Read rss within Emacs
 (use-package elfeed
   :straight t
@@ -8299,7 +8321,7 @@ nerd-icons 图标。
 另外两处按平台分叉：=gnu/linux= 在 ~telega-before-auth-hook~ 里加一个本地 SOCKS5 代理，~darwin~ 下
 开 ~telega-alert-mode~。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 ;; -*- lexical-binding: t; -*-
 (use-package telega
   :straight (:host github :repo "zevlg/telega.el"
@@ -8670,7 +8692,7 @@ advice 了 ~dired-do-copy~，把 dired 里标记的文件附到可见的 chatbuf
 让它在那一刻真的加载，而不是等 dired 里第一次按 ~C~ 才靠 autoload 拉起——那条 advice 必须已经装好，
 否则 ~C~ 就是普通的复制。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 (use-package telega-dired-dwim
   :after telega
   :demand t)
@@ -8685,7 +8707,7 @@ README：Emacs 里的 X/Twitter 浏览器，认证与取数全部交给 ~twitter
 no-littering 的 =var/chirp/= 下，并 ~make-directory~——首次用之前就得存在。~:config~ 是一串「关掉」：
 不显头像、不显媒体、不要分隔符，同 ~telega~ 那边「图片会影响启动」是同一个思路。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 ;; [chirp] twitter client
 (use-package chirp
   :straight (:host github :repo "LuciusChen/chirp")
@@ -8722,7 +8744,7 @@ no-littering 的 =var/chirp/= 下，并 ~make-directory~——首次用之前就
 ~browse-url-emacs~（用 Emacs 自己的 ~url-retrieve~ 抓下来）。本配置没有设
 ~browse-url-browser-function~，「用哪个外部浏览器」完全交给系统默认。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 ;; [browse-url] Pass a URL to browser
 (use-package browse-url
   :bind (("C-, o" . browse-url-at-point)
@@ -8737,7 +8759,7 @@ no-littering 的 =var/chirp/= 下，并 ~make-directory~——首次用之前就
 只有一行设置：~shr-max-image-proportion 0.5~，图片不超过半屏。三个浏览器入口的分工是：读文档用
 ~eww~、需要 JS 的页面用 ~xwidget~、其余交给系统浏览器。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 ;; [eww] Builtin browser
 (use-package eww
   :config
@@ -8752,7 +8774,7 @@ no-littering 的 =var/chirp/= 下，并 ~make-directory~——首次用之前就
 只改 buffer 名格式（~*XWidget: <title>*~）。它是编译期特性：本机这个 Emacs 带 xwidget 支持，
 ~xwidget-webkit-browse-url~ 才存在。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 (use-package xwidget
   :config
   (setq xwidget-webkit-buffer-name-format "*XWidget: %T*"))
@@ -8762,7 +8784,7 @@ no-littering 的 =var/chirp/= 下，并 ~make-directory~——首次用之前就
 
 ~provide~ 把 ~init-emacs-web~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-web.el
+#+begin_src emacs-lisp :tangle core/init-emacs-web.el :mkdirp yes
 (provide 'init-emacs-web)
 #+end_src
 
@@ -8794,7 +8816,7 @@ iconv -f UTF-16LE~ 把值从 UTF-16LE blob 里解出来，读不到就退回 ~gp
 本配置只调一次 ~gptel-agent-update~：tools 的注册归它自己管，这里不逐个开关工具，也不放宽上面那层
 确认默认值。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 ;;; -*- lexical-binding: t -*-
 
 (use-package gptel
@@ -8843,7 +8865,7 @@ WebKit stores the value as a UTF-16LE blob.  Fall back to whatever
   (add-hook! gptel-post-response-functions #'gptel-end-of-response))
 #+end_src
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package gptel-agent
   :straight t
   :after gptel
@@ -8862,7 +8884,7 @@ recipe 指向 roife 的 fork 而不是 MELPA，原因就是上面那些上游没
 （参数是一个 FIFO 路径）用——生成成功就往 FIFO 写 ~"0"~ 加 message，失败写 ~"1"~ 加状态或错误，做法
 是往 gptel 的 ~:post~ 里追加一个写 FIFO 的回调，不碰生成流程本身。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package gptel-magit
   :straight (gptel-magit :type git :host github :repo "roife/gptel-magit")
   :require-incrementally (magit t)
@@ -8923,7 +8945,7 @@ reasoning 与 tool 的 chunk 是 cons 而不是 ~nil~，直接忽略——只有
 多行字符串因此是顶格的。token 上限由「文本长度的平方根 + 2.5 × 词数」现算，而不是直接用
 ~gptel-quick-word-count~：buffer 路径刻意让 ~gptel-quick~ 保持惰性加载，那个 defcustom 可能还没加载。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package gptel-quick
   :straight (gptel-quick :type git :host github :repo "roife/gptel-quick")
   :bind (("C-c g e" . +gptel-quick-explain)
@@ -9127,7 +9149,7 @@ header 里另加了可点的选项：~+agent-shell-extend-header-model~ 把 ~col
 键位上 ~M-<return>~ 留给 ~agent-shell-submit-override~——它 steer 正在跑的 turn，普通换行留给
 shell-maker 的 ~S-<return>~，两者不能互换。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package agent-shell
   :straight (:type git :host github :repo "xenodium/agent-shell")
   :require-incrementally
@@ -9289,7 +9311,7 @@ links 调 ~agent-shell-links-bookmark-setup~ 并在 ~ol~ 加载后注册 ~agent-
 transcript 目录改到 =var/agent-shell/remote-transcripts/= 后开 mode；attention 等到第一次进入
 ~agent-shell-mode~ 才启 global mode，并明确不要零计数、不发系统通知。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package agent-shell-fork-tree
   :straight (:type git :host github :repo "roife/agent-shell-fork-tree")
   :after agent-shell
@@ -9306,7 +9328,7 @@ transcript 目录改到 =var/agent-shell/remote-transcripts/= 后开 mode；atte
          ("C-c g t" . agent-shell-fork-tree)))
 #+end_src
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package agent-shell-btw
   :straight (:type git :host github :repo "roife/agent-shell-btw")
   :after agent-shell
@@ -9320,7 +9342,7 @@ transcript 目录改到 =var/agent-shell/remote-transcripts/= 后开 mode；atte
          ("C-c b" . agent-shell-btw)))
 #+end_src
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package agent-shell-links
   :straight (:type git :host github :repo "ultronozm/agent-shell-links.el")
   :after agent-shell
@@ -9334,7 +9356,7 @@ transcript 目录改到 =var/agent-shell/remote-transcripts/= 后开 mode；atte
      :store #'agent-shell-links-org-store)))
 #+end_src
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package agent-shell-tramp
   :straight (:type git :host github :repo "junyi-hou/agent-shell-tramp")
   :after agent-shell
@@ -9347,7 +9369,7 @@ transcript 目录改到 =var/agent-shell/remote-transcripts/= 后开 mode；atte
   (agent-shell-tramp-mode 1))
 #+end_src
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package agent-shell-attention
   :straight (:type git :host github :repo "ultronozm/agent-shell-attention.el")
   :commands agent-shell-attention-mode
@@ -9377,7 +9399,7 @@ README：~agent-shell~ 会自动把完整对话 transcript 存成 Markdown 或 O
 ~agent-recall-consult~ 是同一个仓库里的 consult 前端，这里只绑 =C-c g /= 并把
 ~agent-recall-consult-resumable-only~ 设成 ~nil~——搜索结果里也保留不能恢复的条目，方便只读查历史。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package agent-recall
   :straight (:type git :host github :repo "mrx-xo/agent-recall")
   :hook (agent-shell-mode . agent-recall-track-sessions)
@@ -9385,15 +9407,17 @@ README：~agent-shell~ 会自动把完整对话 transcript 存成 Markdown 或 O
          ("C-c g u" . agent-recall-resume))
   :init
   (setq agent-recall-search-paths
-        (mapcar #'expand-file-name
-                '("~/.config/emacs" "~/src" "~/.config" "~/.config/emacs/var/agent-shell"))
+        (list user-emacs-directory
+              (expand-file-name "src" "~")
+              (expand-file-name "~/.config")
+              (expand-file-name "var/agent-shell" user-emacs-directory))
         agent-recall-max-depth 3
         agent-recall-search-function 'consult-ripgrep
         agent-recall-browse-sort 'modified-desc
         agent-recall-resume-continue-transcript t))
 #+end_src
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package agent-recall-consult
   :bind ("C-c g /" . agent-recall-consult-search)
   :init
@@ -9408,7 +9432,7 @@ README：用一个 agent 实现、再让另一个 agent 评审——自动收集
 本配置自己加了一个入口 ~+agent-review-grok~：绑在 ~C-c g r~，先 ~require~ ~agent-shell-xai~，再用它的
 grok config 调 ~agent-review~——于是「评审者」固定成 Grok Build，与被评审的 agent 是谁无关。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (use-package agent-review
   :straight (:type git :host github :repo "nineluj/agent-review")
   :commands agent-review
@@ -9433,7 +9457,7 @@ OpenAI OAuth（~gptel-openai-oauth~），与本章主用的 Magpie 网关是两�
 ~:disabled~ 就是因为它现在只有 OAuth 那套凭据可用；留着是因为那两个命令展示了「补全没有候选时退回
 原本的移动命令」这个写法，删掉就只剩 git 历史可查。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 ;; [gptel-copilot] gptel-powered inline code completion
 (use-package gptel-copilot
   :disabled
@@ -9469,7 +9493,7 @@ OpenAI OAuth（~gptel-openai-oauth~），与本章主用的 Magpie 网关是两�
 
 ~provide~ 把 ~init-emacs-ai~ 登记成 feature，这个模块的加载到此结束。
 
-#+begin_src emacs-lisp :tangle core/init-emacs-ai.el
+#+begin_src emacs-lisp :tangle core/init-emacs-ai.el :mkdirp yes
 (provide 'init-emacs-ai)
 #+end_src
 
