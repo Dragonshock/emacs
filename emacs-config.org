@@ -9,7 +9,124 @@
 #
 # 方案见 dev-docs（在 dotfiles 仓库的 emacs/dev-docs，023/024/025）。
 
+* 这个配置的结构
+
+这一节讲三件事：文件之间的真源关系、启动时的加载顺序、以及改了配置之后怎么落到磁盘上。
+读完这一节，后面的 23 个模块才有位置感——它们不是并列的章节，而是同一条加载链上顺序敏感的分段。
+
+** 唯一真源是 emacs-config.org
+
+本仓库里只有一份东西是手写的：这个 org 文件。~core/~ 下的 23 个 ~init-*.el~ 全部由
+org-babel 从本文件各自的 ~#+begin_src~ 块 tangle 出来，文件头部的 ~:tangle core/init-xxx.el~
+就是它们的出生证明。因此看到 ~core/init-xxx.el~ 里有问题时，永远去改本文件里对应的代码块，
+直接编辑生成物会在下次 tangle 时被无声覆盖。
+
+两个例外：~early-init.el~ 与 ~init.el~ 不在 tangle 范围内，它们是手写的骨架文件。
+前者在包系统初始化之前运行（early-init 阶段能改的东西有限，所以它只做最早期的准备），
+后者负责把 ~core/~ 加入 ~load-path~ 并逐个 ~require~。要调整这两个文件，直接改文件本身。
+
+** 加载顺序住在 init.el
+
+模块之间几乎不互相 ~require~，所以「谁先加载」这件事没有藏在任何模块内部，而是集中写在
+~init.el~ 的 ~require~ 列表里，逐条对应本文件里模块标题的顺序。这个顺序并不自由：
+大部分相邻关系确实无所谓，但有几条是真的约束（~init-util~ 必须最先、~init-theme~ 必须早于
+~init-platform~ 与 ~init-ui~、~init-edit~ 必须早于 ~init-prog~ 等），改标题顺序就是改加载顺序，
+改加载顺序可能让某些 ~keymap~ 或主题在错误的时机生效。需要重排时先确认自己动到的是不是约束边。
+
+** 包管理交给 straight
+
+所有第三方包经 straight.el 安装，~use-package~ 只负责声明式配置。本配置把
+~straight-use-package-by-default~ 设为 ~nil~，于是每个 ~use-package~ 都显式带 ~:straight~
+关键字（全文一百多处）——多打几个字，换来的是「这个包从哪来」在阅读时不必猜。
+straight 的引导写在 ~init-straight~，它必须在其它模块使用任何 ~:straight~ 之前跑完。
+
+** 编辑循环
+
+改动流程只有一条：编辑本文件里的散文或代码块，然后 ~C-c C-v C-t~（org-babel-tangle）
+把代码块写回 ~core/~。散文不参与 tangle，所以纯文档改动应当是 ~git diff core/~ 为空的一次提交；
+反过来说，如果只想改文档却看到 ~core/~ 有 diff，说明误动了代码块。
+
+** 约定
+
+~+~ 前缀（~+eshell-toggle~、~+load-theme~）表示本配置私有的符号，用来和上游包的命名区分；
+~init-~ 前缀只用于模块名。~use-package~ 里的 ~:init~ / ~:config~ / ~:hook~ 等关键字保持常规语义，
+不额外定义缩写。散文用中文，代码注释保持原样（很多是从上游或 DOOM 抄来的英文注释，改动它们
+只会让与上游的对照变难）。
+
+* 模块地图
+
+23 个模块按「关注什么」分成五组。分组只影响阅读顺序，不影响加载顺序——加载顺序永远是
+~init.el~ 里那个列表。建议路线：底座 → 外观 → 交互 → 语言与文档 → 外部世界。
+
+** 底座
+
+- ~init-util~ —— 宏地板：~add-hook!~ 与 ~defadvice!~，后面每一节都在用。
+- ~init-straight~ —— 包管理器引导与 ~use-package~ 集成。
+- ~init-core~ —— 没有专属模块的内置行为的收容所，也是全文最长的一节。
+
+** 外观
+
+- ~init-theme~ —— 主题选择与明暗跟随，平台层与主题层之间的唯一接口。
+- ~init-ui~ —— 窗口装饰、行号、边框等视觉细节。
+- ~init-platform~ —— macOS 特化：外观变化、修饰键、外部应用联动。
+- ~init-highlight~ —— 高亮类小包的取舍（被注释掉的那些是否决，不是待办）。
+- ~init-modeline~ —— 模式行。
+
+** 交互
+
+- ~init-completion~ —— 补全栈：~vertico~ / ~consult~ / ~embark~ / ~corfu~ 一族。
+- ~init-search~ —— 搜索与替换的入口（~consult~ 之外的那些）。
+- ~init-edit~ —— 编辑行为与 ~C-c r~ 前缀键的归属。
+- ~init-window~ —— 窗口管理与 popper 规则表。
+- ~init-dired~ —— 文件管理。
+
+** 语言与文档
+
+- ~init-prog~ —— 编程通用层：Eglot、语法检查、跳转、~C-c r r~ 等。
+- ~init-langs~ —— 各语言的专属配置。
+- ~init-writing~ —— 纯文本与写作。
+- ~init-org~ —— Org 本体与导出/预览。
+- ~init-agenda~ —— 议程、捕获、refile，建立在 ~init-org~ 定下的目录结构上。
+
+** 外部世界
+
+- ~init-vcs~ —— Git 与版本控制前端。
+- ~init-tools~ —— 零散工具与系统集成。
+- ~init-mail~ —— 邮件。
+- ~init-web~ —— RSS、浏览器、即时通讯等网络入口。
+- ~init-ai~ —— LLM 相关的两条栈（~gptel~ 与 ~agent-shell~）。
+
 * init-util
+
+** 这一节是宏地板
+
+这一节里没有一个功能，只有后面二十几节都会用到的两个宏和两个 helper。它在 ~init.el~ 里排第一不是风格问题：
+~add-hook!~ 与 ~defadvice!~ 在后续每个模块里都在被调用，它们没定义，加载就会在第一个使用者处中断。
+两个宏都来自 DOOM Emacs，实现与注释一并保留，方便和上游对照。
+
+** add-hook! 解决的形状问题
+
+内置的 ~add-hook~ 一次只装一个函数到一个 hook，而配置里更常见的形状是「一批函数装到一批 hook」，
+并且经常要指定 ~:append~（不指定时函数被插到最前，顺序与包自带的相反）或 ~:local~（buffer-local）。
+~add-hook!~ 把这三个维度压进一次调用，还允许直接写 ~defun~ 形式，省掉「先定义再挂载」两步。
+
+真正需要留意的是两个「立即调用」选项。~:call-immediately~ 立刻把函数跑一遍；
+~:unless-daemonp-call-immediately~ 只在非 daemon 会话里立刻跑。二者不等价，而这一区别后面是决定性的：
+daemon 启动时没有图形帧，主题以及一切与帧相关的初始化必须推迟到第一次真正建帧，那里用的都是后者。
+
+** defadvice! 把 advice 写成声明式
+
+~advice-add~ 的形状是「函数、位置、目标」，同一个 advice 挂到多个目标就要重复几遍。
+~defadvice!~ 反过来：先写定义，再用 ~:around #'target~ 或 ~:override '(a b c)~ 列出位置与目标，
+一条声明同时完成定义与挂载。后文大量出现的 ~:override~ 基本上都是同一个用途——上游有 bug 或与本配置的
+假设冲突，就地整段替换，而不 fork。
+
+** 两个 helper
+
+~+enable-conservative-scrolling~ 让滚动尽量不跳屏，它在 ~init-agenda~ 里被 calfw 的 hook 复用，
+是这一节唯一被别人调用的函数。~+unfill-region~ 是 ~fill-region~ 的反操作，把换行还原成空格；
+全文目前只有定义、没有调用点，它属于「迟早要用」的小工具，不要以为它已经在生效。
+
 #+begin_src emacs-lisp :tangle core/init-util.el
 ;;; -*- lexical-binding: t -*-
 
@@ -107,6 +224,30 @@ This command does the inverse of `fill-region'."
 #+end_src
 
 * init-straight
+
+** 引导顺序
+
+开头那段 ~setq~ 必须写在 bootstrap 之前：straight 在加载 bootstrap 时才读这些变量，写在后面等于没写。
+其中三条值得解释：~straight-check-for-modifications nil~ 关掉「已装的包是否被本地改动」的扫描，
+启动省时间，代价是手动改过 ~straight/build/~ 里的文件不会被发现；
+~straight-vc-git-default-clone-depth '(1 single-branch)~ 用浅克隆、只取默认分支，拉取快、体积小；
+~straight-disable-native-compile~ 只在没有原生编译能力的构建上为真，免得反复尝试。
+
+** 显式 :straight 的代价换来了什么
+
+~straight-use-package-by-default~ 是 ~nil~，于是每个 ~use-package~ 都要自己写 ~:straight~。
+多打的这些字换来的是「这个包从哪来」在读的时候不用猜：MELPA 的写 ~:straight t~，GitHub 直取的写
+~:host github :repo ...~，内置的写 ~:type built-in~。同理，~use-package-always-defer~ 与
+~use-package-always-demand~ 按 ~daemonp~ 二选一——daemon 下全部立即加载（反正只启动一次），
+普通会话下全部延迟，启动更快。
+
+** once 与 straight-overview 是两个入口，不是开关
+
+~once~ 提供增量加载：把延迟加载的工作摊到启动之后的一段时间里，节奏由 ~once-idle-timer~ 与
+~once-incremental-run-interval~ 控制；~once-use-package-keyword-aliases~ 让后续模块可以写
+~:require-incrementally~，不必每个包都改写法。~straight-overview~ 是查询入口，用来看某个包的 recipe、
+版本与依赖，只在真的调用时才加载。
+
 #+begin_src emacs-lisp :tangle core/init-straight.el
 ;;; -*- lexical-binding: t -*-
 
@@ -163,6 +304,52 @@ This command does the inverse of `fill-region'."
 #+end_src
 
 * init-core
+
+** 这一节为什么最长
+
+这里是内置行为的收容所：凡是「没有专属于自己的包、又必须设」的行为都落在这里，所以它按 Emacs 自身的概念
+组织（文件落点、编码、会话历史、长行、滚动、TRAMP、comint、环境变量、project、Eshell），而不是按某个包
+组织。读的时候不必从头到尾，按 ~;; [feature]~ 注释跳读即可。
+
+** 落点：no-littering 先行
+
+~no-littering~ 带着 ~:demand t~ 排在文件最前面，后面所有「写到哪」的决定都建立在它之上：
+backup、auto-save、elpa、ispell 个人词典、tramp-rpc 与 ghostel 的缓存目录，全部改道到 ~var/~ 下。
+顺序在这里是有语义的——在它之前用 ~no-littering-expand-var-file-name~ 只会报未定义。
+
+** 会话状态：saveplace、recentf、savehist
+
+三个包都用 ~:set~ 那套函数之外的写法，原因写在各自的注释里：这些包的自保存间隔是 **:set 函数装定时器**，
+而 ~setq~ 只把数字存进变量、不调用函数。所以文件里统一用「在 mode hook 里 ~setopt~」，
+并且 ~when~ 判断 mode 真的开着——定时器归属跟着模式走，而不是跟着变量走。
+~recentf~ 的排除表本质上是「什么不该出现在最近文件里」的清单（缓存、TAGS、~var/folders~、远程路径），
+~recentf-keep nil~ 则是不跟踪缓冲区而只记文件。~savehist~ 额外保存 kill-ring、mark-ring 与搜索环，
+存之前用 advice 把 text properties 洗掉，否则持久化文件会被属性撑大。
+
+** 长行、滚动与显示性能
+
+~long-line-threshold~ 与 ~syntax-wholeline-max~ 调小、~bidi-inhibit-bpa t~ 关掉双向文本扫描，
+都是为长行准备的；~so-long~ 是兜底，它一旦触发就成批关掉高亮类 minor mode——
+那份名单必须和 ~init-highlight~ 里注册的 mode 对得上。滚动那段除了变量，还把 ~C-v~ / ~M-v~ 换成
+一次滚 10 行的 ~+scroll-window~，这属于个人手感，与性能无关。
+
+** 编码、环境变量与 TRAMP
+
+locale 与编码集中在文件中部：统一 UTF-8，并在 TTY 帧上显式设置键盘与终端编码（
+终端 frame 不会自动继承图形帧的那套）。~exec-path-from-shell~ 在文件里靠前、且带 ~:unless noninteractive~，
+理由写在它上面：登录 shell 的 ~PATH~ 必须在任何 mode hook 用到外部程序之前导入，
+而 batch 会话不需要这一套。TRAMP 用 ~rpc~ 作为默认方法（~tramp-rpc~ 把文件操作交给远端代理，
+比默认的 ssh 通道快得多），它自己的本地缓存目录同样收进 ~var/~。
+
+** Eshell 家族
+
+这一段的顺序比内容更容易出错。~+eshell-toggle~ 里先让 buffer 出现、再让 ~eshell-mode~ 生效，
+所以 popper 只能按 buffer 名（~Eshell-popup: <项目名>~）识别它；~display-buffer-alist~ 用 ~append~ 而不是
+~add-to-list~ 前置，是为了让 popper 更早的规则先命中。后续的 ~esh-help~、~eshell-syntax-highlighting~、
+~esh-autosuggest-corfu~、~ghostel~ 各自只补一个能力，其中两处 advice 是给上游 bug 打的补丁，
+注释里写了成因。终端相关的 KKP 与 xterm 也在这一节：~kkp-restore-legacy-keys-around-subprocesses~
+必须写在 ~global-kkp-mode~ 打开之前，因为它是模式启用时读的。
+
 #+begin_src emacs-lisp :tangle core/init-core.el
 ;;; -*- lexical-binding: t -*-
 
@@ -972,6 +1159,30 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 #+end_src
 
 * init-theme
+
+** 声明写在文件顶部是有理由的
+
+~use-package ashen~ 带 ~:demand t~ 且必须留在文件最前面：这个声明把 ~straight/build/ashen~ 挂上
+~custom-theme-load-path~ 与 ~load-path~，而同一文件底部的 ~+load-theme~ 通过 ~tty-setup-hook~ 上的
+~:unless-daemonp-call-immediately~ 在加载时就会真的跑一次。第一次 ~load-theme~ 必须已经能找到 ashen 目录，
+所以这个声明既不能挪到 ~init-ui~，也不能挪到文件后面——这是全文少数「位置本身就是正确性」的地方。
+
+** ~+system-appearance~ 是平台层与主题层之间唯一的接口
+
+主题层自己不探测系统外观。写入者是 ~init-platform~：Linux 上收 D-Bus 的 ~color-scheme~ 变化，
+macOS 上轮询 ~AppleInterfaceStyle~，两边都只调用 ~+system-appearance-changed~，由它记下值并在存在图形帧时
+重选主题（通知可能在终端帧被选中时到达，所以先 ~seq-find~ 一个图形帧再干活）。主题层只读这个变量，
+读不到时回落到 ~ns-system-appearance~，再回落到深色。因此有一条加载顺序约束：本模块必须早于
+~init-platform~，否则平台层第一次调用时主题层还没准备好。
+
+** 换主题前为什么要先 disable
+
+选主题的逻辑不复杂：图形帧看 ~+system-appearance~，终端帧看 ~background-mode~ 这个终端参数
+（终端能报告背景色时才有值）。值得说明的是那句 ~mapc #'disable-theme~：ashen 由明暗两个主题组成，
+直接叠加载时后一个的 face 会覆盖前一个，但前一个留下的 face 集合不会消失，最终结果取决于加载顺序
+而不是当前外观。先全部关掉再加载，结果就只由「现在是什么外观」决定。
+~after-make-frame-functions~ 上另有一个函数负责新建图形帧时补一次，因为 daemon 的第一个帧可能晚于这一切。
+
 #+begin_src emacs-lisp :tangle core/init-theme.el
 ;;; -*- lexical-binding: t -*-
 ;; Declared here, not in init-ui: `init.el' requires init-theme before init-ui and
@@ -1032,6 +1243,40 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 #+end_src
 
 * init-ui
+
+** 这一节管的是「长什么样」
+
+帧与显示层的开关都在这里：抑制输入期间的重绘、光标与行号、fringe 位图、像素级缩放、minibuffer 深度提示、
+鼠标滚轮步长、window-divider、字体、连字、滚动进度，以及终端图形。它们大多彼此独立，
+按 ~;; [feature]~ 注释分组读即可，不需要顺序读，唯一有内部顺序的是字体那一段。
+
+** 行号：「永不打开」要写成关掉
+
+~global-display-line-numbers-mode~ 一开全开，但阅读类与聊天类界面不需要行号。
+在 hook 里显式设成 ~display-line-numbers-mode -1~ 的语义不是「开了再关」：被全局化模式这样关过的 buffer
+会被永不处理（Emacs ≥ 24.1 的行为），所以这一条表达的是「这些 mode 里永不出现行号」。
+名单里同时有 telega、elfeed、mu4e 与 ghostel——都是流式内容，行号没有意义且会随刷新抖动。
+
+** 字体是 fontset，不是一次 set-face-attribute
+
+默认字体只设一次，但 fallback 不是一次性的：CJK 的落霞文楷按 charset 挂进 fontset，符号与 emoji 是
+~prepend~ 上去的，而 ~+setup-fonts~ 挂在 ~server-after-make-frame-hook~ 上、每建一个帧都跑。
+重复 ~prepend~ 会让同一批 fallback 层层堆叠，所以那一段被 ~+default-fontset-configured-p~ 守着只做一次。
+emoji 的目标是 ~emoji~ charset 加两个单独码位——眼睛与卡片索引分隔符在 macOS 上会被当文本画；
+而用 ~unicode~ charset 会把 Latin 字体一起顶掉，所以没有那样做。
+
+** 连字在 Org 里被单独关掉
+
+~ligature-mode~ 只挂 ~prog-mode~，理由写在注释里：Org 用 text properties 把强调定界符藏起来，
+但连字仍可能把「看不见的定界符」和「看得见的内容」合成一个字形，于是 ~path/**=~ 的结尾会漏出半个定界符。
+这是少数「渲染层的问题必须在配置层绕开」的例子。
+
+** 终端也归这里管
+
+~kitty-graphics~ 让支持 Kitty graphics protocol 的终端内联显示图片与视频，挂在 ~tty-setup~ 上；
+~frame-title-format~ 顺带把标题栏变成文件路径。~custom-safe-themes t~ 不是外观选项而是启动可靠性选项：
+它跳过「首次加载未知主题」的确认框，让首次启动不会被一个 modal 卡住。
+
 #+begin_src emacs-lisp :tangle core/init-ui.el
 ;; -*- lexical-binding: t; -*-
 
@@ -1271,6 +1516,34 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 #+end_src
 
 * init-platform
+
+** 这一节是外观信号的唯一生产者
+
+两个平台分支做的是同一件事：把「系统现在是明还是暗」变成一次 ~+system-appearance-changed~ 调用。
+主题层只消费结果，不做探测，所以主题层（~init-theme~）必须排在本节之前——否则第一次 ~+load-theme~
+时还没有 ~+system-appearance~。这也就是本节唯一与加载顺序相关的地方。
+
+** Linux：走 XDG Settings portal
+
+桌面环境把配色偏好暴露在 ~org.freedesktop.appearance~ 的 ~color-scheme~ 上：订阅 ~SettingChanged~
+处理后续变化，再用一次 ~Read~ 拿当前值（信号与 ~Read~ 的返回值包装层数不同，所以有那个 ~while~ 剥壳）。
+整段包在 ~condition-case~ 里、并且只在 ~dbus-register-signal~ 可用时才注册：headless 会话、
+没有 session bus 的构建仍然要能正常启动，失败就安静地保持默认深色。注册结果存在
+~+linux-appearance-signal~ 里，帧创建时若已注册就复用，避免每次建帧都多挂一个信号。
+
+** macOS：为什么是轮询
+
+Nix 版 Emacs 在 macOS 上不更新 ~toolkit-theme~，事件那条路走不通，于是用 2 秒一次的定时器重读
+~defaults read -g AppleInterfaceStyle~。有一个细节值得留意：~call-process~ 在 ~default-directory~
+指向已被删除的目录时会直接报 ~file-missing~，而这段代码原本因此每 2 秒报一次错，
+所以读之前先把 ~default-directory~ 退回到存在的路径。
+
+** 快捷键
+
+~mac-command-modifier~ / ~mac-option-modifier~ 那两行是注释掉的：当前的选择是保留系统的 Command 语义，
+再用 ~s-~ 前缀把最常用的 macOS 习惯键接到编辑命令上，并解绑 ~s-,~（它默认弹出 Emacs 的相关选项，
+容易与系统偏好设置混淆）。
+
 #+begin_src emacs-lisp :tangle core/init-platform.el
 ;;; -*- lexical-binding: t -*-
 (when (eq system-type 'gnu/linux)
@@ -1370,6 +1643,35 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 #+end_src
 
 * init-highlight
+
+** 这一节的内容一半是取舍
+
+高亮类 minor mode 的问题不是装哪一个，而是同时开几个。~rainbow-delimiters~ 已经按深度给每一层括号上色，
+~hl-line~ 给当前行底色，~hl-todo~ 给注释里的关键字上色，~symbol-overlay~ 给同一符号上色——
+再加下去就开始互相遮盖，所以这一节里的取舍和设置一样重要。
+
+** 两个被注释掉的包是否决，不是待办
+
+~highlight-parentheses~ 会在最外层括号上加下划线，与 ~rainbow-delimiters~ 的配色重复且更吵；
+~goggles~ 只在 undo / yank / kill / delete / transpose 时脉动，普通打字根本不触发，开着几乎看不到效果。
+两处的注释都写明了否决理由，如果要恢复，先读那两行并想好代价。
+
+** 与 so-long 的名单对应
+
+这些 mode 大多挂在 ~after-init~ 或 ~prog-mode~ 的 hook 上。~init-core~ 里 ~so-long-minor-modes~
+的名单同时列了 ~highlight-parentheses-mode~、~goggles-mode~、~rainbow-delimiters-mode~、
+~symbol-overlay-mode~、~hl-line-mode~ 等——碰到超长行文件时它们会被优先关掉。两份名单是配套的：
+这里新增一个全局高亮 mode，就该考虑是否也要进那一份，否则碰到压缩过的 JS 文件会卡死。
+
+** pulse 与 hl-todo 的两个特例
+
+~hl-todo~ 的 keyword face 在换主题后不会自动更新，所以 ~enable-theme-functions~ 上挂了
+~+hl-update-keyword-faces~，每次换主题按 ~error~ / ~warning~ 的当前前景色重设一遍
+（~BUG~/~DEFECT~/~ISSUE~ 跟 error，~WORKAROUND~/~HACK~/~TRICK~ 跟 warning）。
+~pulse~ 那一组 advice 是把「跳转之后给个视觉落点」统一到一处：跳转类命令不再各写各的 ~recenter~，
+而是走 ~+recenter-and-pulse~；~+pulse-window-local-a~ 把脉冲 overlay 绑到当时选中的窗口，
+避开别的窗口一起闪。
+
 #+begin_src emacs-lisp :tangle core/init-highlight.el
 ;;; -*- lexical-binding: t -*-
 
@@ -1554,6 +1856,35 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 #+end_src
 
 * init-modeline
+
+** 这里没有自建 modeline
+
+不要在这一节找「modeline 框架」：模式行本身用的是内置的 ~mode-line-format~，这一节做的是另外三件事——
+修正主题留下的 face 问题、往 header-line 放 breadcrumb、用 tab-bar 承载全局指示器。
+规模上的克制是刻意的：排版交给主题，配置只负责「哪些信息该出现」。
+
+** 两处 face 修正
+
+~+mode-line-box-match-background~ 把 ~mode-line~ / ~mode-line-inactive~ 的 box 颜色改成各自的背景色，
+因为 ashen 用前景色画 box，会多出一圈对比明显的描边；顺带清掉 ~:overline~，免得换主题后残留一条细线。
+~+tab-bar-selected-underline-off~ 去掉选中标签的下划线——那是 ashen 标记当前标签的方式，
+与 tab-bar 自身的高亮重复。两个函数都同时挂在 ~enable-theme-functions~ 与 ~after-init-hook~ 上：
+换主题要重设，而首次启动时主题已经加载完、~enable-theme-functions~ 不会再触发。
+
+** breadcrumb：变量名必须写全名
+
+配置里写的是 ~breadcrumb-*~ 而不是短前缀。~breadcrumb.el~ 末尾有一段 file-local 的
+~read-symbol-shorthands~，把 ~bc-~ 映射成 ~breadcrumb-~，那是**读取那份源码时**的展开；
+配置在另一个文件里读，没有那份 shorthands，写短前缀只会得到一个不存在的变量。
+
+** tab-bar 承载全局指示器
+
+~tab-bar-format~ 被改成「三个缓存的指示器 + 标签列表」：org-agenda 的待办数、telega 的未读数、
+emms 的播放状态。三者用的是同一模式——先定义 ~+tab-bar-*-indicator-cache~，再挂 advice 在事件发生时
+重算缓存并 ~force-mode-line-update~，而不是让 ~tab-bar-format~ 每次都去问一遍（那会在每个 redisplay 周期里
+跑 ~telega-chats-list~ 这类重函数）。每一段都在 ~with-eval-after-load~ 里装，相应包不在就不存在。
+另有一个 daemon 下的 workaround：新建帧与 ~window-setup~ 时手动重建 tab-bar 行，否则 client 帧会缺标签。
+
 #+begin_src emacs-lisp :tangle core/init-modeline.el
 ;;; -*- lexical-binding: t -*-
 
@@ -1723,6 +2054,40 @@ left unchanged."
 #+end_src
 
 * init-completion
+
+** 两条补全栈，互不干扰
+
+minibuffer 里的补全走 vertico 那条栈，buffer 内的补全走 corfu 那条栈，两者不共享 UI 也不共享命令集。
+这个分工的好处是任何一层都能单独换掉：换掉 vertico 不影响 corfu，换掉 orderless 只改匹配风格。
+
+** minibuffer 侧的分层
+
+阅读顺序就是分层顺序：~vertico~ 是 UI（垂直列表、循环、计数），~orderless~ 是匹配（空格分隔的多个组件
+按任意顺序命中），~marginalia~ 是注解（候选右边那段说明），~embark~ 是动作（对着候选做事），
+~consult~ 是命令集（把 ~switch-to-buffer~、~imenu~、~yank-pop~ 等换成带预览的版本）。
+~orderless~ 里那段 ~orderless-affix-dispatch-alist~ 与 ~+orderless-consult-dollar~ 是本地改动：
+~@~ 被用来标注解（orderless 原本用 ~&~），~$~ 允许在 consult 加消歧后缀之前命中行尾。
+~consult~ 自己还多了一个 buffer 源 ~+consult-source-fd~，用 ~fd~ 在当前项目里找文件。
+
+** buffer 侧：corfu、cape、tempel 各管一段
+
+~corfu~ 是弹出补全，~cape~ 补 backend（~cape-file~ 与 ~cape-dabbrev~ 挂在全局 capf 上，
+TeX / Org / Markdown 里额外挂 ~cape-tex~），~tempel~ 是模板（用 ~cape-capf-trigger~ 把触发符 ~/~
+接进 capf）。~+corfu-move-to-minibuffer~ 是两条栈之间的桥：光标处候选太多或用不顺手时，
+按 ~S-TAB~ 把整个 capf 交给 consult 的 minibuffer UI。eshell 与 shell 里 ~corfu-auto~ 被单独关掉，
+因为命令行里自动弹窗会与 pcomplete 打架。
+
+** 两处 straight recipe 的坑
+
+~vertico~ 与 ~corfu~ 的注释写着同一件事：不要写自定义 ~:files~。MELPA 的 recipe 已经包含
+~extensions/*.el~，再写一份会让 straight 看到同一个包的两个不同 recipe 并发出警告。
+~avy-embark-collect~ 则相反——它明确从 embark 仓库只取一个文件。
+
+** 只在 minibuffer 内绑的键
+
+~C-c C-c~ / ~C-c C-e~（collect / export）绑在 ~minibuffer-local-map~ 而不是全局：
+全局绑定会被 ~org-ctrl-c-ctrl-c~ 与 ~comment-dwim~ 在各自的 major mode 里遮住，等于时灵时不灵。
+
 #+begin_src emacs-lisp :tangle core/init-completion.el
 ;;; -*- lexical-binding: t -*-
 
@@ -2035,6 +2400,34 @@ left unchanged."
 #+end_src
 
 * init-search
+
+** 刻意用内置 isearch
+
+这一节没有第三方搜索 UI：缓冲区内的查找与跳转都建立在 ~isearch~ 上，能配的都用 ~isearch-*~ 变量配。
+好处是行为稳定、与 ~query-replace~ / ~occur~ / ~consult-line~ 都兼容；代价是拿不到模糊匹配这类东西，
+那部分交给补全那一节的 consult。
+
+** 与 init-completion 的分工
+
+两节都对「找东西」负责，但对象不同：~init-completion~ 决定「在一堆候选里选哪个」，
+这一节决定「在文本里跳到哪」。所以 ~consult-line~、~consult-ripgrep~ 在补全那一节，
+而 isearch 增强、~avy~ 的跳转、~link-hint~ 的链接识别在这一节。
+
+** isearch 的几条设置
+
+~isearch-lax-whitespace~ 让一个空格匹配任意长度的空白（代码里很实用）；~isearch-allow-motion~ 与
+~isearch-motion-changes-direction~ 让 ~M-<~ / ~M->~ 在搜索中直接跳到首个／末个匹配并改变后续方向；
+~isearch-lazy-count~ 加 ~lazy-highlight-buffer t~ 让搜索时能看到全部匹配与总数；
+~isearch-resume-in-command-history~ 让 ~C-x ESC ESC~ 能重放上一次搜索。
+两个 ring 的容量放大到 200，因为 ~savehist~ 会把它们持久化，历史上限就等于磁盘上的上限。
+
+** avy 与 link-hint
+
+~avy~ 负责「用两三个键跳到屏幕上任意位置」，几个入口固定在 ~C-,~ 前缀下。
+~avy-styles-alist~ 只给 ~avy-isearch~ 指定 ~pre~ 风格：搜索中的候选键显示在匹配**之前**，
+不会被高亮盖住。~link-hint~ 复用同一套机制去识别 URL，一个打开、一个复制。
+~ezf~ 是反方向的入口——让终端里的 shell 把补全交给 Emacs。
+
 #+begin_src emacs-lisp :tangle core/init-search.el
 ;;; -*- lexical-binding: t -*-
 ;; [isearch] Use builtin isearch to replace `anzu'
@@ -2098,6 +2491,54 @@ left unchanged."
 #+end_src
 
 * init-edit
+
+** 四层读法
+
+这一节包很多，顺序读没用，按层读才有用：文本卫生（~ws-butler~、~editorconfig~、~apheleia~）、
+结构与配对（~elec-pair~、~puni~、~hideshow~）、撤销与历史（~vundo~、~undo-fu-session~、~undo-hl~）、
+替换与移动（~substitute~、~separedit~、~mwim~、~beginend~、~subword~）。
+每一层都可以单独理解，层与层之间真正的耦合只有一处，就是下面的 ~C-c r~。
+
+** 文本卫生
+
+kill-ring 的三条设置决定了复制粘贴的手感：~kill-do-not-save-duplicates~ 去重，
+~save-interprogram-paste-before-kill~ 在覆盖系统剪贴板前先把内容存进 kill-ring，
+~kill-ring-deindent-mode~ 剥掉复制文本的公共缩进。~apheleia~ 在保存时异步格式化，
+「不移动 point」是它相对其他格式化方案的主要优点；~ws-butler~ 只清你动过的行，而不是整个文件。
+
+** 结构与配对
+
+~elec-pair~ 在 shell 里需要单独处理：~+electric-pair-shell-setup~ 把 ~electric-pair-field-search-size~
+放大到 4096，让配对只在输入字段里生效、不去扫进程输出。~puni~ 提供结构感知的编辑，
+~+puni-hungry-delete~ 让 ~DEL~ 先吃缩进再交给 puni——顺序反了会把整层结构删掉。
+~hideshow~ 的 ~+hideshow-setup~ 为 ruby / nxml / latex 单独写块定义，因为默认的 SMIE 语法
+在这几种 mode 上给出的边界不对。
+
+** 撤销
+
+~undo-fu-session~ 把撤销历史持久化到磁盘，~.gpg~ 与几个 git 临时文件被排除；有 ~zstd~ 时用 ~zst~ 压缩。
+~undo-hl~ 把撤销/重做的改动高亮出来，避免「按了 C-/ 但不知道改回去了什么」，
+~vundo~ 是可视化入口，~vundo-roll-back-on-quit~ 让退出时自动回滚到选中状态。
+三者是同一件事的三个面：历史存不存、看得见看不见、怎么浏览。
+
+** ~C-c r~ 是跨模块的键位契约
+
+~substitute~ 带着 ~:demand t~，那一段注释是全文件最值得读的注释之一：~substitute-prefix-map~
+是一个变量形式的 keymap，~C-c r~ 必须先成为**前缀键**，后面 ~init-prog~ 才能往它下面加 ~C-c r r~
+（quickrun）与 ~C-c r c~（citre），本节自己也往它下面挂 ~C-c r f~（apheleia）。
+如果 ~substitute~ 处于延迟状态，符号还没有 keymap 值，绑定 ~C-c r~ 会让它变成普通键，
+此时子键的 ~define-key~ 会中断启动并报
+~Key sequence C-c r r starts with non-prefix key C-c r~。
+因此有一条真实约束：本模块必须在 ~init-prog~ 之前加载。这是全文唯一「一个模块占住前缀、
+另一个模块消费子键」的约定，改 ~substitute~ 的加载方式就是在改它。
+
+** 移动与杂项
+
+~mwim~ 区分「行首」与「代码首」，~beginend~ 让 ~M-<~ / ~M->~ 在代码里跳到首／末个 sexp，
+~subword~ 让 ~M-f~ / ~M-b~ 把驼峰拆成几段。~easy-kill~ 扩展 ~M-w~，~sudo-edit~ 为需要权限的文件
+加一条就地提权的路径。~ispell~ 与 ~flyspell~ 的 skip-region 名单让代码块与内联标记不被当成拼写错误——
+对中文写作来说，这两份名单是最直接省事的部分。
+
 #+begin_src emacs-lisp :tangle core/init-edit.el
 ;;; -*- lexical-binding: t -*-
 
@@ -2464,6 +2905,35 @@ left unchanged."
 #+end_src
 
 * init-window
+
+** 这一节的两个问题
+窗口自己怎么摆（~ace-window~、~winner~、~zoom~），以及谁有资格占用窗口（~popper~）。前者是操作，
+后者是策略，而这一节真正的资产是后者那张规则表。
+
+** popper 的规则表
+~popper-reference-buffers~ 混排了三类元素：正则字符串、major mode 符号、谓词函数，命中任意一条的
+buffer 就被当作 popup。表里有两条按 buffer 名字写的规则（~^\\*Ibuffer\\*$~ 与 ~^Eshell-popup: .*$~），
+原因是那两个模块都先显示 buffer、后启用 mode：~ibuffer~ 先 ~display-buffer~ 再进 ~ibuffer-mode~，
+~init-core~ 的 ~+eshell-toggle~ 也是先弹 buffer 再开 ~eshell-mode~。所以名字规则和 mode 规则不能
+合成一条——删掉名字那条，等于删掉第一次显示。
+
+** 显示但不选中
+~+popper-reference-buffers-no-select~ 目前只有 ~\\*Warnings\\*~。~+popper-smart-popup~ 顶掉
+~popper-display-function~：窗口固定开在下方、占一半高度，然后按这份名单决定要不要
+~select-window~。名单用 ~,@~ 拼进 ~display-buffer~ 的 alist 末尾，是为了让 popper 自己的显示规则
+先命中、这份名单只做补充。
+
+** C-g 关 popup 是 hack
+~+popper-close-window-hack~ 挂在 ~keyboard-quit~ 之前：有打开中的 popup、且没有活动区域时直接
+~delete-window~。收益是 ~C-g~ 有了「关掉这个弹窗」的直觉语义；代价是它与「~C-g~ 只取消」的内置约定
+不同，而且只认 ~popper-open-popup-alist~ 里记着的窗口——被别的路径关掉的 popup 要等 popper 自己
+更新列表之后才不再被这条 advice 看到。
+
+** zoom 的三处局部例外
+~zoom~ 按窗口数自动平衡尺寸，但有三种 buffer 的尺寸不能被改：~vundo~（要固定尺寸看图）、
+~speedbar~（只要宽度）、~ediff~（只要高度）。做法不是在 zoom 里加例外配置，而是在各自的 mode hook
+里设 buffer-local 的 ~window-size-fixed~，再把这些 mode 列进 ~zoom-ignored-major-modes~。
+
 #+begin_src emacs-lisp :tangle core/init-window.el
 ;;; -*- lexical-binding: t -*-
 
@@ -2638,6 +3108,28 @@ left unchanged."
 #+end_src
 
 * init-dired
+
+** 文件列表是别的模块的地基
+这一节是 dired 本体加一组扩展，但它不只服务「手动浏览文件」：~project-dired~、~fd-dired~、
+~dired-preview~、~dired-git-info~ 都落回同一个 buffer。所以这里定的按键（~TAB~ 展开、~.~ 隐藏、
+~;~ 过滤、~V~ 预览）和显示习惯会被别的模块继承，改之前先想清楚谁会受影响。
+
+** 几处「关掉」是主题无关性要求
+~dired-subtree-use-backgrounds~ 与 ~dired-collapse-fontify~ 都被显式关掉：subtree 的深度 face 和
+collapse 的 shadow overlay 都是硬编码的深绿，跟不了主题。留下的是行前缀 ~"  |  "~ 和折叠本身，
+即「保留结构信息、丢掉硬编码颜色」。这是本文件里反复出现的一条取舍。
+
+** 递归与两个 dired 之间的语义
+~dired-recursive-deletes 'top~ 只在顶层问一次就整棵删；~dired-dwim-target t~ 让两个 dired 窗口互相
+成为复制/移动的目标，这是它比「猜路径」好用的原因。macOS 上有 GNU ~gls~ 就用它（
+~--group-directories-first~ 需要 GNU 的 ls），没有就关掉 ~dired-use-ls-dired~ 以消掉
+「ls does not support --dired」的告警。
+
+** 预览与折叠的作用域不同
+~dired-preview~ 在 point 上停 0.5 秒后预览文件，跳过启动瞬间与大于 10MB 的文件；~dired-collapse~
+折叠只有单条子链的目录；~ffx~ 做同一件事，但作用于文件名补全而不是 dired buffer。三者看着重复，
+其实分属三个入口（点、buffer、补全），所以都留着。
+
 #+begin_src emacs-lisp :tangle core/init-dired.el
 ;;; -*- lexical-binding: t -*-
 
@@ -2770,6 +3262,41 @@ left unchanged."
 #+end_src
 
 * init-prog
+
+** 写代码的主干
+顺序本身有信息：先 ~compile~（怎么把代码跑起来），再 ~xref~（怎么在代码里跳），然后 ~eglot~ 与
+~flymake~（谁来提供诊断），最后是 ~indent-bars~、~envrc~ 这类装饰与环境。每个包都能单独读，
+真正的机制都在它们的交界处。
+
+** 编译输出被当成一种诊断来源
+~compile~ 本身只有三条设置（不叠加进程、不追问保存、滚到第一个错误），真正的份量在
+~+compilation-flymake-*~ 那一串函数：~compilation-finish-functions~ 触发一次收集，把编译 buffer 里
+已解析的 message 转成 flymake 诊断，再按文件分发回各自源 buffer 的 flymake；同时把全项目的诊断塞进
+~flymake-list-only-diagnostics~，这样没有打开的 buffer 也能在 ~C-c f p~ 里看到。
+写这么多是因为内置没有「编译错误 → 项目级 lint 面板」这条路。另两条 hook 分别限流
+（编译 buffer 超过阈值才截断）和上色（ANSI 转义）。
+
+** Eglot 与 Flymake 的接管关系
+~+eglot-auto-start-modes~ 是唯一的 mode 名单，两处消费：~eglot-ensure~ 挂在名单里每个 mode 的 hook
+上；~+flymake-mode-h~ 在开 Flymake 之前，先把这些 mode 的原生 backend（~rust-ts-flymake~、
+~flymake-cc~、~python-flymake~）从 buffer-local 的 ~flymake-diagnostic-functions~ 里摘掉。
+顺序在这里就是正确性：不摘，异步 checker 会在 Eglot 接管之后继续报旧结果。
+~eglot-stay-out-of 'flymake-diagnostic-functions~ 是同一件事的另一半，防止 Eglot 反过来动本地列表。
+
+** 跳定义是一个能力队列，不是并列选项
+~xref-search-program 'ripgrep~ 决定文本搜索用 rg；~dumb-jump~ 挂在 ~xref-backend-functions~ 上，是
+没有 LSP 时的兜底；~citre~ 既把 dumb-jump 注册成自己的后端，又用
+~citre-find-definition-backends '(eglot tags global dumb-jump)~ 决定自己先问谁。三层串成「从强到弱」的
+队列，所以同一个键在不同项目里能落到不同实现上。~citre-enable-xref-integration~ 默认关掉是有意的：
+让 citre 走自己的 CAPF，不去全局替换 xref。
+
+** ~C-c r~ 在这里只是消费者
+本节往 ~C-c r~ 下挂 ~C-c r r~（~quickrun~）和 ~C-c r c~（更新 citre 的 tags）。前缀键本身属于
+~init-edit~ 的 ~substitute~，那条约束写在 ~init-edit~ 里，这里是它唯一的消费方——想知道为什么
+~substitute~ 必须 ~:demand t~，去读那一节。
+文件末尾二次出现的 ~-*- lexical-binding: t -*-~ 和后面两个命令是后来追加的，与上面的内容没有依赖：
+一个用来在 rust-analyzer 里跑 ~cargo xtask install --server~，一个按项目名找到并重启 Eglot 的日志 buffer。
+
 #+begin_src emacs-lisp :tangle core/init-prog.el
 ;;; -*- lexical-binding: t -*-
 
@@ -3244,6 +3771,30 @@ separate argument, although the command accepts only one."
 #+end_src
 
 * init-langs
+
+** 这一节只装 mode，不装服务器
+条目普遍很短：一个 mode、几个缩进变量、少量语法约定。语言服务器一律不在这里——它们统一由
+~init-prog~ 的 Eglot 按 ~+eglot-auto-start-modes~ 与 ~eglot-server-programs~ 拉起。
+这条分界的好处很直接：加一门语言只需在本节里加几行，不用碰任何 LSP 配置。
+
+** 缩进是一组对外的约定
+~c-basic-offset 4~ 配 ~(c-set-offset 'case-label '+)~ 是「case 与 switch 平级」的 K&R 风格；
+~js-indent-level~ 与 ~css-indent-offset~ 都是 2；~rust-mode~ 把缩进交给
+~rust-ts-indent-offset~，并把 rust-mode 从 ~dtrt-indent~ 的映射表里改成这个值，等于宣布「不猜缩进、
+用 treesit 的结果」。~verilog-mode~ 那一大段全是同一件事：把 Verilog 的缩进与对齐固定下来，
+否则 auto-inst 生成的代码每次都不一样。
+
+** 两个大件：treesit 与 web-mode
+~treesit~ 段只有几行，但 ~treesit-auto-install-grammar 'always~ 意味着缺语法时 Emacs 会自己联网
+下载——这是显式选择，代价是首次打开某种语言要等一次下载。~web-mode~ 在另一头：一长串 ~:mode~
+正则接管模板类文件（~.erb~、~.svelte~、~.jinja2~、~.php~ 等），因为只有它认得 HTML/CSS/JS 三段
+混排时各自的缩进。
+
+** built-in 标注只影响阅读
+~js~、~css-mode~、~verilog-mode~、~treesit~ 标了 ~:type built-in~，意思是「只写配置、不安装」；
+其余走 straight。这个标注不影响运行时行为，只让读者一眼看出哪几段代码不需要联网就能生效——
+在和 ~treesit~ 那种会下载的段落对照时这点区别有用。
+
 #+begin_src emacs-lisp :tangle core/init-langs.el
 ;;; -*- lexical-binding: t -*-
 ;; Langs
@@ -3384,6 +3935,31 @@ separate argument, although the command accepts only one."
 #+end_src
 
 * init-writing
+
+** 管的是非 Org 的长文本
+Markdown、Typst、LaTeX。与 ~init-org~ 的分界是：这里决定「一篇文章在 buffer 里怎么显示、怎么折叠、
+怎么编译」，Org 文件自己的设置在 ~init-org~。两者共用的是同一批写作习惯（软换行、居中、中英混排），
+但各写一遍比抽公共层更省事。
+
+** 中文排版的三件事
+~pangu-spacing~ 在中英文之间补视觉空格（只改显示，不动文件）；~visual-fill-column-center-text~ 用
+~setq-default~ 因为它是 buffer-local；~visual-line-mode~ 只挂在 ~org-mode-hook~ 与
+~markdown-ts-mode-hook~ 上，不全局开——代码 buffer 里的软换行会把行号、缩进和 ~fill-column~
+的关系搞乱。
+
+** markdown-ts-mode 的四个开关与一个补丁
+四个开关分别对应 Org 用户的四种期待：~fold-headings~ 打开时只留标题、代码块按内嵌语言高亮、
+块内 TAB/换行用该语言的行为、管道表格按 ~org-table~ 的习惯编辑。补丁那一段是 ~dotimes~ 把
+~markdown-ts-heading-N~ 的 ~:inherit~ 指到 ~org-level-N~：上游给六级标题同一个 face，改成继承 Org
+之后层级可辨、而且跟着主题走。
+
+** Typst 与 LaTeX
+Typst 走 ~typst-ts-mode~ 加 tinymist：~typst-ts-lsp-download-path~ 指到 no-littering 的
+~var/lsp/~ 下，并在下载前先把目录建好（否则第一次启动会失败一次）。LaTeX 走 AUCTeX，
+~TeX-parse-self~ / ~TeX-auto-save~ 让它记住宏包信息，~.auctex-auto~ 与 ~.auctex-style~ 把这两类
+缓存藏进隐藏目录，免得跟正文混在一起。~TeX-source-correlate-start-server nil~ 是因为本机已有独立的
+Emacs server 策略，不想 AUCTeX 再起一个。
+
 #+begin_src emacs-lisp :tangle core/init-writing.el
 ;;; -*- lexical-binding: t -*-
 
@@ -3479,6 +4055,39 @@ separate argument, although the command accepts only one."
 #+end_src
 
 * init-org
+
+** 边界：只管「Org buffer 长什么样」
+这一节是 Org 作为文档格式的一切：链接、源码块、表格、折叠、预览、导出。任务流（TODO、refile、
+capture、agenda）在 ~init-agenda~。所以这里几乎全是变量，逻辑只有几段 hook 和一个小 font-lock 函数。
+~org-directory~ 定在 =~/org/= 是一个对外的前提：下一节的 agenda 文件名全部由它推出。
+
+** 长是因为变量多，不是因为逻辑多
+~use-package org~ 的 ~:config~ 分成 prettify、编辑、源码块、附件、编号五组。值得单独说的只有三处：
+~org-startup-folded nil~ 让 ~#+startup~ 与文件自己的可见性说了算；
+~org-highlight-sparse-tree-matches nil~ 让 sparse tree 只过滤可见性、不把整行画成选区；
+~org-emphasis-regexp-components~ 把边界放宽到 ~[:nonascii:]~，否则中文紧贴 ~=...=~ 时强调不生效——
+这一条对中文写作是刚需。
+
+** 表格自动对齐要自己挂
+Org 只在 ~org-table-next-field~ 与 ~org-table-next-row~ 里对齐，普通命令离开表格会留下参差的行。
+~+org-realign-table-maybe-h~ 挂在 ~post-command-hook~ 上补这一刀，条件收得很紧（在表格里、且
+~org-table-may-need-update~），并且自己保存/恢复 point、静音 message，所以不会变成移动时的噪音。
+它的前身是 meow 退出 insert state 的钩子，meow 已不加载，这条注释说明的是历史而不是现状。
+
+** 预览链是最绕的一处
+现状是三个新名字：~org-latex-preview-cache 'persist~（缓存）、~org-latex-preview-process-default~、
+~org-latex-preview-appearance-options~；文件里保留的旧名注释记录了一次迁移，旧名在 Org 10 会被删。
+~org-typst-preview~ 提供第二条渲染路径，靠自己的 keymap remap 顶替 ~org-latex-preview~。
+~org-fragtog~ 是这条链上的例外：它直接调 ~org-latex-preview~、只匹配 LaTeX element，所以不受
+remap 影响——Typst 公式进出 point 时它不接管，这正是它被单独注释说明的原因。
+
+** org-element 必须晚于 org
+~org-persist~ 与 ~org-element~ 都标了 ~:straight nil~（它们是 Org 自带的文件，不需要安装），
+~org-element~ 还带 ~:require-incrementally (org t)~。注释给的约束是「先有 Org 再加载它们」，因为
+~org-element~ 依赖 Org 已定义好的结构。这是全节唯一硬性的加载顺序，其余条目（~ox~、~org-modern~、
+~ob-mermaid~）谁先谁后都无所谓。顺带一提 ~:require-incrementally~ 的语义：它列出该包的全部子文件，
+让它们按需加载，而不是在 ~require~ 主包时一次性全部读进来。
+
 #+begin_src emacs-lisp :tangle core/init-org.el
 ;;; -*- lexical-binding: t -*-
 
@@ -3747,6 +4356,44 @@ separate argument, although the command accepts only one."
 #+end_src
 
 * init-agenda
+
+** 前提是一组固定的文件名
+~org-directory~（在 ~init-org~ 里定在 =~/org/=）下的一组固定文件：~agenda/~ 目录里的 ~actions~、
+~calendar~、~inbox~、~personal~、~routines~、~someday~、~work~（都是 ~.org~）。refile 的目标、
+capture 的落点、agenda 的文件列表全部由这份名单推出：
+~org-refile-targets~ 里五个、~org-agenda-files~ 里七个、~org-capture-templates~ 各条各指一个。
+新增一个文件要在这三处同时改——这是本节唯一的隐式契约，也是改这一节时最容易搞错的地方。
+
+** TODO 关键字是一套单流程工作流
+~TODO/NEXT/DOING/WAIT/SOMEDAY | DONE/CANCELED~ 一条 sequence，没有为每个项目单开流程。
+记号本身带语义：~WAIT(w@/!)~ 的 ~@~ 记时间、~!~ 强制加 note，配上 ~org-log-into-drawer~ 与
+~org-log-done 'time~，所有状态变化都进 :LOGBOOK: 而不是漂在正文里。
+
+** 归档按源文件分年份
+全局的 ~org-archive-location~ 是 ~"%s_archive::* Archived"~，但 ~+org-set-project-archive-location~
+在 ~org-mode-hook~ 里把它改成 buffer-local 的 ~archives/<文件名>-<年>.org::* Archived~。
+代价是归档目标随年份变化（跨年回看得翻两个文件），收益是任何单个归档文件都不会无限长。
+这个 hook 只在 ~buffer-file-name~ 存在时动手，所以临时 buffer 里的 Org 不会被误设。
+
+** 三层视图：agenda、calendar、calfw
+~org-agenda-custom-commands~ 的 ~d~（Dashboard）是主入口：一个 agenda 块 + 本周到期的习惯 + 按状态
+分组的 todo。两个 skip 函数是它的配套：~+agenda-skip-habit~ 把重复任务从其它块里排除，
+~+agenda-skip-unless-habit-due-this-week~ 把“今天到本周日”的习惯单独收进来（区间重复如
+~.+2d/4d~ 取最晚那个到期日）。~+agenda-show-breadcrumbs~ 在每行标题后追加“文件名 ▸ 父标题”，
+代价是要在 ~org-agenda-finalize~ 里手工插文本属性，所以它先检查这一行是不是已经标过。
+calendar 与 calfw 是同一份数据的另两个面：calendar 靠 ~diary-file~ 里的 ~%%(org-diary)~（注释里
+说明了这一点，好处是保留 Org 的调度与重复语义），calfw 走 ~calfw-org~ 加一个订阅的 ical 源（节假日）。
+~calfw-blocks~ 的周视图是最终入口：它把 calfw 默认的 toolbar 渲染 advice 删掉再换成自己的，
+因为普通视图传两个参数而 block 视图传四个；~+calfw-block-contents~ 还要把带时间的条目和全天的
+分开，否则周视图会把没有时间的条目也画成色块。
+
+** 通知链：org-clock → appt → 系统通知
+~org-clock~ 在这里只留一个入口（~org-show-notification~），真正干活的是 ~appt~：它把今天带时间的
+条目变成提醒，而 ~appt-disp-window-function~ 被换成调用 ~org-show-notification~ 的函数，于是“弹窗”
+与“系统通知”成为同一条路径，不需要在 macOS / Linux 上各写一份。刷新是延迟的：~+appt-refresh~
+用 0.75 秒的 idle timer 去重（capture 与 todo 状态变化都会触发它），另有一个 00:01 的定时器
+保证跨天时不漏。~org-pomodoro~ 只对当前 entry 计时（30 分钟工作 / 15 分钟长休息）。
+
 #+begin_src emacs-lisp :tangle core/init-agenda.el
 ;;; -*- lexical-binding: t -*-
 
@@ -4123,6 +4770,38 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
 #+end_src
 
 * init-vcs
+
+** 三层，不是一个包
+内置 ~vc~（只留 Git：~vc-handled-backends '(Git)~）是地基；~diff-hl~ 基于它把未提交的改动画到 fringe；
+Magit 家族是在同一份 Git 数据上的另一套 UI。三层共存不是浪费：~vc~ 负责“打开文件时知道它在仓库里”，
+Magit 负责“看仓库”，~diff-hl~ 负责“看当前 buffer 相对 HEAD 的差异”。
+
+** diff-hl 需要三个外部触发
+它画的是 ~vc~ 的状态，所以 ~vc-refresh-state~ 之后要手动更新一次（advice）；~ws-butler~ 保存后会
+把
+buffer 恢复成“没改过”的样子，它之后也要更新（advice）；~after-focus-change-function~ 是第三种
+（切窗口后不同 buffer 的 diff 要重算）。终端帧没有 fringe，所以 ~diff-hl-fallback-to-margin~。
+两处 fringe face 被换成 ~diff-refine-*~ 系列，好处是颜色跟着主题的 diff 面走。
+
+** GitHub token 只从 gh CLI 取
+~+ghub--token-from-gh-cli~ 调 ~gh auth token~，结果缓存在内存里的 ~+ghub-gh-token-cache~，~ghub~
+与 ~remoto~ 都走这条路径。~remoto~ 那条还多判一次 forge 名字，因为 ~remoto-forgejo~ 继承
+~remoto-github~，类型谓词对 Codeberg 也为真。原则很简单：配置里不出现 token，也不落盘。
+
+** 一堆“关掉”与一个杀 buffer 的策略
+~magit-diff-paint-whitespace nil~（不画空白差异）、~magit-save-repository-buffers nil~（不替用户
+保存仓库里所有 buffer）、~magit-revision-insert-related-refs nil~（commit buffer 变快）。
+~+magit-kill-buffers~ 把 ~magit-bury-buffer-function~ 换成“恢复窗口布局再把 magit buffer 全杀掉”，
+只对还有进程在跑的 buffer 退一步用 bury。作为对照，~magit-difftastic~ 是通过
+~transient-append-suffix~ 往 magit 的 diff 菜单里加一个开关，而不是另起一个入口。
+
+** smerge 与剩下的单动作包
+~+smerge-try-smerge~ 在 ~find-file~ 时扫一遍 ~^<<<<<<< ~，只在确实有冲突、且文件受 VC 管时才开
+~smerge-mode~；配一个 flymake backend，把未解决的冲突标成 error，于是冲突从“看不见的文本”变成
+诊断面板里的一项。其余几个包（~forge~、~magit-todos~、~abridge-diff~、~browse-at-remote~、
+~git-link~、~git-modes~）各自只负责一个动作，合起来的意思很朴素：凡是 Git 相关的事都不必离开 Emacs。
+注意 ~forge~ 的草稿目录与 ~magit-todos~ 的 ~update nil~ 都是为了避免后台任务在启动时发网络请求。
+
 #+begin_src emacs-lisp :tangle core/init-vcs.el
 ;;; -*- lexical-binding: t -*-
 
@@ -4375,6 +5054,23 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
 #+end_src
 
 * init-tools
+
+** 只有两件东西，共同点是“读”
+~speedbar~ 是目录/结构树，~emureader~ 是 PDF/EPUB 阅读器。它们都不参与编辑流程——共同点就在这里：
+只需要“看”而不需要“改”的工具都落在本节，所以这一节短得只有两个 ~use-package~。
+
+** speedbar 走自己的 window
+~speedbar-prefer-window t~ 让它用自己的 window 而不是另开一帧，宽度固定 30。它跟 ~init-window~
+的耦合在那一节：zoom 把它列进 ~zoom-ignored-major-modes~ 并设了 ~window-size-fixed 'width~，
+两边配合才不会一开 speedbar 就被自动平衡改宽度。
+
+** emureader 要在这里编译
+它是 C 扩展包，~:pre-build~ 直接跑 ~make~。三条命令行赋值都有具体原因：它的 Makefile 一发现 nix
+就强制 ~USE_PKGCONFIG=off~，然后转头去找 Homebrew 的 mupdf；命令行赋值优先级更高，所以直接把
+~USE_PKGCONFIG=yes~ 与 Home Manager 的 pkgconfig 路径递进去。~module-file-suffix~ 是为了让 ~:files~
+在 macOS（~.dylib~）与 Linux（~.so~）上都命中构建产物。换句话说，这段 recipe 本身就是这个包在本机
+的安装说明：删掉它，包还在，但下次重编译就找不到 mupdf。
+
 #+begin_src emacs-lisp :tangle core/init-tools.el
 ;;; -*- lexical-binding: t -*-
 
@@ -4402,6 +5098,33 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
 #+end_src
 
 * init-mail
+
+** mu 与 mu4e 必须来自同一个包
+两者都来自 Nix 的 ~mu4e~ output：~mu~ 二进制与 ~mu4e.el~ 版本错配会直接报错，所以不要让 straight
+去克隆 djcb/mu。本节因此自己做了一件通常由包管理器负责的事：~+mu4e-lisp-dir~ 沿着
+~executable-find "mu"~ 的符号链接往上爬，找 ~share/emacs/site-lisp/mu4e~——因为 nix-darwin 的用户
+profile 只 link 了 ~bin/mu~ 而没 link ~share/emacs~，但它的 home-manager 目标里两者都有。
+找不到就整节静默跳过，保证启动不失败。
+
+** 凭据分三层放
+地址与姓名在 ~private.el~（gitignored，在设置之前 ~load~）；IMAP/SMTP 密码在 Keychain
+（~auth-source~，配置里不出现）；发信账号由 ~+set-msmtp-account~ 在 ~message-send-mail-hook~ 里按
+From 头挑 msmtp 账户。好处是“这封信从哪个地址发”和“用哪个账号发”永远一致，切换 context 不需要
+再想 SMTP 的事。
+
+** 两个 context 与它们的文件夹名
+gmail 与 qq 各一个 ~mu4e-context~，~match-func~ 按收件人匹配；~mu4e-context-policy 'pick-first~
+决定读信时优先命中哪个，~mu4e-compose-context-policy 'ask~ 决定写信时要不要问。文件夹名必须写死
+成 IMAP 上的真名（Gmail 的 ~[Gmail]/Sent Mail~ 即使 UI 是中文也不变），因为 mu4e 是按路径同步的。
+另两处小改动属于显示层：~+mu4e-split-view-sensibly~ 按 ~split-width-threshold~ 在左右/上下之间选
+（竖向时标题在左），~*mu4e-update*~ 被钉在下方 10% 高度的窗口里，不抢正文。
+
+** use-package 在 Emacs 31 是 autoload
+所以 ~fboundp~ 恒真，“mu4e 已装”这个判断不能用它。这里用 ~cond~ 三分支：~locate-library~ 找不到就
+什么都不做；~noninteractive~（batch）直接 ~require~ 并应用设置，便于测试；正常会话用
+~use-package :commands~ 延到第一次调用 ~mu4e~。设置本身收在可重复调用的 ~+mu4e-apply~ 里，所以
+改了 ~private.el~ 之后重新调它就行，不需要重启。
+
 #+begin_src emacs-lisp :tangle core/init-mail.el
 ;;; -*- lexical-binding: t -*-
 
@@ -4588,6 +5311,51 @@ home-manager path that the symlink points at still has both."
 #+end_src
 
 * init-web
+
+** 全文第二大，但里面是四个不相干的入口
+elfeed（RSS）、telega（Telegram）、chirp（Twitter）、browse-url / eww / xwidget（浏览器）。
+规模几乎全在 elfeed 与 telega 上：前者因为过滤规则，后者因为上游行为的 hack。四块之间没有共享
+代码，只有“都是网络入口”这一个共同点。
+
+** elfeed 的 feed 有两类来源
+远端 URL，以及 ~var/rss/~ 下的本地 atom（由 ~scripts/hn-elfeed.py~、
+~scripts/reddit-elfeed.py~ 生成，用 ~file://~ 注册）。本地 atom 意味着“feed 列表里的一项可能
+还不存在”，所以有一层构造函数（~+elfeed-file-feed~、~+elfeed-hn-feed~）和一个幂等的注册函数
+（~+elfeed-ensure-reddit-feed~：文件可读才注册、已在列表里就不重复）。更新时先起一个子进程跑
+~scripts/update-elfeed-feeds~ 重新生成这些 atom，等它结束后才调原来的更新函数；即使子进程失败也照样
+继续拉远端 feed（只在 ~*elfeed-local-feeds*~ 里留一条 message），因为本地 atom 坏了不该让 RSS 整个停摆。
+
+** 两条 :around advice 必须分开写
+~+elfeed-update-after-local-feeds-a~ 与 ~+elfeed-update-background-after-local-feeds-a~ 共用
+~+elfeed--update-after-local-feeds~，只有第三个参数（要不要让子进程生成 HN 摘要）不同。不能合并成
+一条、在 advice 里判“现在是谁在调”：nadvice 传进来的 ~fn~ 是包装对象，~eq~ 不到 ~#'elfeed-update~。
+策略是：交互更新（~g~ / ~G~）总是带 ~ELFEED_HN_LLM=1~，两小时一次的后台刷新绝不自动调 Magpie，
+除非 ~+elfeed-hn-llm~ 非 nil。这样“后台静默花钱”这件事在结构上就不可能发生。
+
+** 过滤是两个正交的维度，加上一条窗口约定
+标签维度：默认过滤 ~"@6months +unread -ad -pr"~；打标在 ~elfeed-new-entry-hook~ 里，~ad~ 只对
+v2ex.com 生效，~pr~ 要“品牌 × 上市措辞 − 行业新闻排除词”三个正则同时成立。这是一套保守的规则，
+宁可漏标也不误标，所以每个正则都有一段注释说明它防的是什么。~+elfeed-backfill-promo-tags~ 是给已有
+条目补标的一次性命令。
+窗口维度则是本模块自己的约定：~+elfeed-display-entry~ 复用右侧已有的 entry 窗口，
+~elfeed-show-entry-delete #'ignore~ 让 ~n~ / ~SPC~ 只换 buffer 不删窗口——删掉之后下一次
+~split-window-sensibly~ 的方向会变，这是它不属于 ~init-window~ 的原因。
+
+** telega 这一段几乎全是 hack
+值得知道的有五类：图片类选项必须在 ~:init~ 里先设（其它选项在它们之前就取了默认值）；bot 命令补全
+上游返回嵌套列表，所以重定义 ~telega-completions--bot-commands~；赞助消息用 ~:override~ 的 advice
+直接返回 nil，再在 ~telega-ready-hook~ 里关掉服务端开关；贴纸靠 advice 临时把 ~telega-use-images~
+绑成 t（全局是 nil，否则图片会影响启动）；~telega-alert~ 的 title/body 里带文本属性，macOS 通知
+不接受，所以用 ~:filter-args~ 剥掉。另外 ~+telega-completions-setup-capf~ 把每个 CAPF 包在“point 在
+输入区”的守卫里，否则补全会扫到只读的历史消息。哪些上游特性故意没抄也写在注释里：Matrix bridge
+（数据是私人的）、keyword 过滤、nerd-icons 图标。
+
+** 浏览器三个入口各自负责一件事
+~browse-url~ 把 URL 交给外部浏览器，~eww~ 在 Emacs 里渲染（~shr-max-image-proportion 0.5~ 限制
+图片不超过半屏），~xwidget~ 用 WebKit 跑需要 JS 的页面。三者并存是因为用途不同：读文档用 eww、
+需要 JS 用 xwidget、其余交给系统浏览器。~chirp~ 段则是一串关掉：不显头像、不显媒体、不要分隔符——
+同 telega 的“图片会影响启动”是同一个思路。
+
 #+begin_src emacs-lisp :tangle core/init-web.el
 ;;; -*- lexical-binding: t -*-
 
@@ -5300,6 +6068,45 @@ text properties are invalid."
 #+end_src
 
 * init-ai
+
+** 两条栈并存，因为它们回答不同的问题
+~gptel~ 面向“对某段文本发一次请求”：请求、响应、渲染都在当前 buffer 或一个结果 buffer 里，生命周期
+随请求结束。~agent-shell~ 面向“一个有状态的命令行会话”：ACP 协议、会话可恢复、可 fork、可 steer。
+键位、数据目录、失败模式都不同，所以不是替代关系——~C-c g~ 下可以同时看到两组。
+
+** 模型 id 来自 Magpie 的 picker
+~+gptel-magpie-store~ 是本机 Magpie（WebKit 应用）的 ~localstorage.sqlite3~ 路径，
+~+gptel-magpie-model~ 用 ~sqlite3 -readonly … | xxd -r -p | iconv -f UTF-16LE~ 把值从 UTF-16LE blob
+里解出来，读不到就退回 ~gptel-model~。~auto/deepseek-flash~ 不是 picker 的选择，而是 WorkBuddy 自己
+的 model id（gptel 不跟随 picker）。两个都定义在 ~:init~ 而不是 ~:config~，因为 ~agent-shell~ 的配置
+要读它们，而那时 ~gptel~ 可能还没加载。
+
+** backend 是三处约束的合成
+~gptel-make-openai~ 指向本机 Magpie 网关（~127.0.0.1:3425~）：host 不是 ~api.openai.com~，所以走
+~/v1/chat/completions~；~:stream t~ 必须显式给，否则 gptel 不流式；~:models~ 里没列出的模型会被丢掉。
+用 ~setq-default~ 而不是 ~setq~ 是因为 ~gptel-backend~ 是 buffer-local。
+
+** gptel-quick 的 render buffer 是本地改写
+上游 fork 用 posframe 弹窗；这里把结果流式写进可复用的 ~*gptel-quick: <action>*~ buffer，用
+~split-window-sensibly~ 决定方向（横屏左右分、竖屏上下分）。能工作的前提有两个：流式时每个 chunk 是
+一次 ~stringp~ 回调、结束时回调 ~t~；非流式路径（~gptel-curl--sentinel~）只回调一次、不发完成信号，
+所以那里要自己调 ~+gptel-quick--show-buffer~。reasoning 与 tool 的 chunk 是 cons，直接忽略——只有
+~nil~ 才表示失败。
+
+** agent-shell 是主体，扩展是一组邻仓包
+主包之外有 ~fork-tree~（会话树）、~btw~（旁问）、~links~（org 链接）、~tramp~（远端 transcript）、
+~attention~（待处理计数）、~recall~（历史检索）、~review~（评审）。三处覆盖值得单独记：
+~+agent-shell-resume-codex-fork~ 在 codex fork 之后补一次 ~session/resume~（否则订阅丢了、历史会被
+重放）；~+agent-shell-dot-subdir~ 把会话数据收敛到 ~var/agent-shell/~；
+~agent-shell--update-bootstrapping-fragment~ 被 override 成 ~ignore~（不要那段引导文字）。
+键位上 ~M-<return>~ 留给 ~agent-shell-submit-override~——它 steer 正在跑的 turn，普通换行留给
+shell-maker 的 ~S-<return>~，两者不能互换。
+
+** 最后一个包是关着的
+~gptel-copilot~ 带 ~:disabled~：它需要 OpenAI OAuth（~gptel-openai-oauth~），与本节主用的 Magpie
+网关是两套凭据。留着是因为它的两个命令展示了“补全没有候选时退回原本的移动命令”这个写法，
+删掉就只剩 git 历史可查。
+
 #+begin_src emacs-lisp :tangle core/init-ai.el
 ;;; -*- lexical-binding: t -*-
 
