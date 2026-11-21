@@ -12,35 +12,35 @@
 * Details of this Emacs build
 
 这套配置运行在 Emacs 31.1（Nix 安装，native compilation 打开），同时用于 macOS 与 Linux。
-没有刻意维护某个 Emacs 版本的下限：配置里用到的都是 31 才有的接口（`split-window-preferred-direction`、
-`use-package` 的内置 autoload、`native-comp` 的相关选项），所以升级 Emacs 时优先检查这些地方，而不是
+没有刻意维护某个 Emacs 版本的下限：配置里用到的都是 31 才有的接口（~split-window-preferred-direction~、
+~use-package~ 的内置 autoload、~native-comp~ 的相关选项），所以升级 Emacs 时优先检查这些地方，而不是
 去兼容更旧的版本。
 
 ** 运行环境
 
-- macOS：`init-emacs-platform` 里的 macOS 分支处理外观轮询与 `s-` 修饰键；`early-init.el` 里对
-  `ns-transparent-titlebar` 的处理也只在 `(featurep 'ns)` 时生效。
-- Linux：`init-emacs-platform` 里走 XDG Settings portal 的 `color-scheme`，`early-init.el` 里
-  清掉 `command-line-ns-option-alist`。
+- macOS：~init-emacs-platform~ 里的 macOS 分支处理外观轮询与 ~s-~ 修饰键；=early-init.el= 里对
+  ~ns-transparent-titlebar~ 的处理也只在 ~(featurep 'ns)~ 时生效。
+- Linux：~init-emacs-platform~ 里走 XDG Settings portal 的 ~color-scheme~，=early-init.el= 里
+  清掉 ~command-line-ns-option-alist~。
 
-两条路径共享同一套模块，平台差异集中在 `init-emacs-platform` 一个文件里，别的模块不写
-`system-type` 判断。
+两条路径共享同一套模块，平台差异集中在 ~init-emacs-platform~ 一个文件里，别的模块不写
+~system-type~ 判断。
 
 ** 构建特性
 
-straight.el 直接 clone 上游仓库并 byte-compile，没有走 `package.el`，因此 `package-enable-at-startup`
-在 `early-init.el` 里被关掉。`straight-vc-git-default-clone-depth` 设为浅克隆（`(1 single-branch)`），
+straight.el 直接 clone 上游仓库并 byte-compile，没有走 =package.el=，因此 ~package-enable-at-startup~
+在 =early-init.el= 里被关掉。~straight-vc-git-default-clone-depth~ 设为浅克隆（~(1 single-branch)~），
 首次安装快，代价是某些包的历史不可查。
 
-`early-init.el` 还关掉了几条启动期的杂音：`native-comp-async-report-warnings-errors` 与
-`native-comp-warning-on-missing-source` 只在 `init-file-debug` 时打开，`warning-suppress-types`
-过滤掉 `defvaralias` 与 `lexical-binding` 两类噪音。
+=early-init.el= 还关掉了几条启动期的杂音：~native-comp-async-report-warnings-errors~ 与
+~native-comp-warning-on-missing-source~ 只在 ~init-file-debug~ 时打开，~warning-suppress-types~
+过滤掉 ~defvaralias~ 与 ~lexical-binding~ 两类噪音。
 
 ** 包管理
 
-所有第三方包由 straight 安装，`use-package` 只做声明。`straight-use-package-by-default` 为 `nil`，
-所以每处 `use-package` 都显式带 `:straight`；这样「这个包从哪来」在阅读时不必猜，代价是多打几个字。
-straight 的引导写在 `init-emacs-straight`，它必须早于任何 `:straight` 声明。
+所有第三方包由 straight 安装，~use-package~ 只做声明。~straight-use-package-by-default~ 为 ~nil~，
+所以每处 ~use-package~ 都显式带 ~:straight~；这样「这个包从哪来」在阅读时不必猜，代价是多打几个字。
+straight 的引导写在 ~init-emacs-straight~，它必须早于任何 ~:straight~ 声明。
 
 * Anatomy of this Emacs configuration
 
@@ -50,7 +50,7 @@ straight 的引导写在 `init-emacs-straight`，它必须早于任何 `:straigh
 - =early-init.el= :: 启动最早期的准备——GC 策略、静默、帧参数、加载优化。运行在任何包与 frame
   之前，所以只做不依赖包、不依赖窗口尺寸的事。
 
-- =init.el= :: 加载器。把 =core/= 加进 =load-path=，按依赖顺序 =require= 各模块，并挂一个启动
+- =init.el= :: 加载器。把 =core/= 加进 ~load-path~，按依赖顺序 ~require~ 各模块，并挂一个启动
   耗时日志。它不含配置逻辑；改动它等于改加载顺序。
 
 - =core/= 目录 :: 23 个配置模块，一个模块一类关注点。模块只调整包的行为，不定义新的功能层。
@@ -61,7 +61,7 @@ straight 的引导写在 `init-emacs-straight`，它必须早于任何 `:straigh
 
 - =etc/= 目录 :: 本地静态配置片段（=eshell/=、=gnus/= 等），由 .gitignore 排除，不属于模块。
 
-- =private.el= :: 身份与账号（邮件地址等），同样被 .gitignore 排除。模块通过 =boundp= 判断它是否
+- =private.el= :: 身份与账号（邮件地址等），同样被 .gitignore 排除。模块通过 ~boundp~ 判断它是否
   存在，不存在时降级而不是报错。
 
 - =var/= 目录 :: Emacs 运行时数据（auto-save、会话、agent-shell 记录），不进版本控制。
@@ -111,61 +111,65 @@ straight 的引导写在 `init-emacs-straight`，它必须早于任何 `:straigh
 #+end_example
 
 那次最重要的分层是 =core/= 内部：23 个模块按「关注什么」分成五组（底座、外观、交互、语言与文档、
-外部世界），但分组只影响阅读顺序，不影响加载顺序——加载顺序永远由 =init.el= 的 =require= 列表决定，
+外部世界），但分组只影响阅读顺序，不影响加载顺序——加载顺序永远由 =init.el= 的 ~require~ 列表决定，
 两者逐条一致。需要重排时，先确认自己动到的是不是真正的依赖边（见 The main initialisation 一节）。
 
 为什么拆成这么多模块：单文件 =init.el= 在几百行之后无法回答「主题为什么这么设」。模块化让一次改动
 只落在一个领域里，也方便单独摘出一段分享。代价是文件多；收益是「谁在什么时候加载」始终只有一个
 答案。
 
-改配置的流程只有一条：编辑本文件里的散文或代码块，=C-c C-v C-t=（=M-x org-babel-tangle=）把代码块
+改配置的流程只有一条：编辑本文件里的散文或代码块，~C-c C-v C-t~（~M-x org-babel-tangle~）把代码块
 写回 =core/=，然后重启 Emacs。散文不参与 tangle，所以纯文档改动应当满足 =git diff core/= 为空；
 反过来说，只想改文档却看到 =core/= 有 diff，说明误动了代码块。
 
-这份配置放在 =~/.config/emacs=，由 Nix 安装的 Emacs 31.1 读取；=~/.emacs.d= 不存在，所以 Emacs
-直接走 XDG 路径。配置同时支持 daemon 与普通启动：=use-package-always-demand= 在 daemon 下为 =t=
-（所有包立即加载），普通启动下模块延迟加载，由 =once= 在空闲时增量推进。
+这份配置放在 ==/.config/emacs=，由 Nix 安装的 Emacs 31.1 读取；==/.emacs.d= 不存在，所以 Emacs
+直接走 XDG 路径。配置同时支持 daemon 与普通启动：~use-package-always-demand~ 在 daemon 下为 ~t~
+（所有包立即加载），普通启动下模块延迟加载，由 ~once~ 在空闲时增量推进。
 
 ** Conventions
 
-- 配置私有的符号用 =+= 前缀（=+load-theme=、=+elfeed-display-entry=、=+mu4e-apply=），与上游包的
+- 配置私有的符号用 ~+~ 前缀（~+load-theme~、~+elfeed-display-entry~、~+mu4e-apply~），与上游包的
   命名区分。
-- =init-emacs-= 前缀只用于模块名。
-- =use-package= 的关键字保持常规语义，不额外定义缩写。
+- ~init-emacs-~ 前缀只用于模块名。
+- ~use-package~ 的关键字保持常规语义，不额外定义缩写。
 - 散文用中文；代码注释保持原样——很多是从上游或 DOOM 抄来的英文注释，改动它们只会让与上游的
   对照变难。
+- 散文里的标记跟随 prot-emacs.org：**符号**（函数、变量、模式、键位、包名）用 ~...~；
+  **文件与目录**（含路径、扩展名、通配）用 =...=。散文里不使用反引号。
+  例：~auto-mode-case-fold~、~C-c C-v C-t~、~M-x org-babel-tangle~；
+  =early-init.el=、=core/=、=~/.config/emacs=。
 
 * The early initialisation of Emacs (=early-init.el=)
 
 这是 Emacs 启动时读的第一个文件，运行在任何包与 frame 之前，所以只能做不依赖包、不依赖窗口尺寸的
-准备。它同时是本文件 tangle 出来的（`:tangle early-init.el`），改它要改下面这些节，不要直接改文件。
+准备。它同时是本文件 tangle 出来的（=:tangle early-init.el=），改它要改下面这些节，不要直接改文件。
 
 ** 与 prot-emacs.org 的 early-init 有何不同
 
-prot 的 `early-init.el` 长在多桌面环境（bspwm/i3/GNOME）与两种 Emacs 构建（GTK / PGTK）上，所以
-有一半篇幅在处理「这是不是笔记本」「是不是 Wayland」这类分支，还用 `user-lisp-directory` 让
-`prot-lisp/` 像包一样被编译。这些都不适合本配置：单机 macOS + Linux、构建固定、自定义代码在
-`core/` 里用 `require` 加载，不需要再引入一个库目录。
+prot 的 =early-init.el= 长在多桌面环境（bspwm/i3/GNOME）与两种 Emacs 构建（GTK / PGTK）上，所以
+有一半篇幅在处理「这是不是笔记本」「是不是 Wayland」这类分支，还用 ~user-lisp-directory~ 让
+=prot-lisp/= 像包一样被编译。这些都不适合本配置：单机 macOS + Linux、构建固定、自定义代码在
+=core/= 里用 ~require~ 加载，不需要再引入一个库目录。
 
 真正值得借鉴、并已采纳的有四项：
 
-- `inhibit-startup-echo-area-message` 要设成 `user-login-name`。文档写的是「与用户名相等」才生效，
-  设成 `t` 并不会抑制 echo area 里的启动信息。
-- 给默认 frame 命名（`set-frame-name "home"`），这样才能用 `select-frame-by-name` 或窗口管理器
+- ~inhibit-startup-echo-area-message~ 要设成 ~user-login-name~。文档写的是「与用户名相等」才生效，
+  设成 ~t~ 并不会抑制 echo area 里的启动信息。
+- 给默认 frame 命名（~set-frame-name "home"~），这样才能用 ~select-frame-by-name~ 或窗口管理器
   按名字选 frame。
-- 启动期清空 `vc-handled-backends`。每次打开文件都会问「这个文件归哪个后端管」，启动阶段没必要。
-  本配置在 `init-emacs-vcs` 里最终把它收敛到 `'(Git)`。
-- `frame-inhibit-implied-resize` 用 `'force` 而不是 `t`：前者连「用户显式改字号」也不许隐式
+- 启动期清空 ~vc-handled-backends~。每次打开文件都会问「这个文件归哪个后端管」，启动阶段没必要。
+  本配置在 ~init-emacs-vcs~ 里最终把它收敛到 ~'(Git)~。
+- ~frame-inhibit-implied-resize~ 用 ~'force~ 而不是 ~t~：前者连「用户显式改字号」也不许隐式
   缩放 frame。
 
-没有采纳的：`user-lisp-directory`（见上）、按设备类型切换 frame 尺寸（单机）、`undecorated`
+没有采纳的：~user-lisp-directory~（见上）、按设备类型切换 frame 尺寸（单机）、~undecorated~
 （GTK 专属，macOS 不适用）。
 
 ** 启动期 GC
 
-启动头几秒把 `gc-cons-threshold` 抬到 `most-positive-fixnum`、`gc-cons-percentage` 抬到 1.0，
-避免在加载模块时反复 GC；`emacs-startup-hook` 里再挂一个 idle 1 秒的定时器，把两者降回
-32 MiB / 0.2。用 idle 定时器而不是直接 `setq`，是为了不让第一次 GC 卡住首帧。
+启动头几秒把 ~gc-cons-threshold~ 抬到 ~most-positive-fixnum~、~gc-cons-percentage~ 抬到 1.0，
+避免在加载模块时反复 GC；~emacs-startup-hook~ 里再挂一个 idle 1 秒的定时器，把两者降回
+32 MiB / 0.2。用 idle 定时器而不是直接 ~setq~，是为了不让第一次 GC 卡住首帧。
 
 #+begin_src emacs-lisp :tangle early-init.el
 ;;; -*- lexical-binding: t -*-
@@ -186,9 +190,9 @@ prot 的 `early-init.el` 长在多桌面环境（bspwm/i3/GNOME）与两种 Emac
 
 ** 启动静默与告警抑制
 
-`ad-redefinition-action 'accept` 让重复定义函数不报错；`jka-compr-verbose` 与两条 native-comp
-告警只在 `init-file-debug` 时为真——启动期看到的告警应当是真问题，不是这几类预期内的噪音。
-`warning-suppress-types` 过滤 `defvaralias` 与 `lexical-binding`，`warning-inhibit-types`
+~ad-redefinition-action 'accept~ 让重复定义函数不报错；~jka-compr-verbose~ 与两条 native-comp
+告警只在 ~init-file-debug~ 时为真——启动期看到的告警应当是真问题，不是这几类预期内的噪音。
+~warning-suppress-types~ 过滤 ~defvaralias~ 与 ~lexical-binding~，~warning-inhibit-types~
 再压掉「缺 lexical-binding cookie」这一类。
 
 #+begin_src emacs-lisp :tangle early-init.el
@@ -204,15 +208,15 @@ prot 的 `early-init.el` 长在多桌面环境（bspwm/i3/GNOME）与两种 Emac
 
 ** 进程、加载与命令行
 
-`read-process-output-max` 抬到 4 MiB，主要给 LSP 用（默认 4 KiB 会让 JSON-RPC 的读取次数急剧
-上升）。`load-prefer-newer` 在 batch（`noninteractive`）时为 t，这样脚本会读到比 `.elc` 更新的源
+~read-process-output-max~ 抬到 4 MiB，主要给 LSP 用（默认 4 KiB 会让 JSON-RPC 的读取次数急剧
+上升）。~load-prefer-newer~ 在 batch（~noninteractive~）时为 t，这样脚本会读到比 =.elc= 更新的源
 文件，而不是被旧字节码骗过去。
 
-`auto-mode-case-fold` 关掉，省掉每个文件名的两次大小写匹配。`command-line-*-option-alist` 按
+~auto-mode-case-fold~ 关掉，省掉每个文件名的两次大小写匹配。~command-line-*-option-alist~ 按
 frame 类型清空——在 macOS 上不需要解析 X11 的选项表，反过来也一样。
 
-`setopt--set` 的 `:around` advice 把 `custom-load-recursion` 打开，防止 `setopt` 在 init 期间
-为了类型检查提前加载 `custom` 依赖。
+~setopt--set~ 的 ~:around~ advice 把 ~custom-load-recursion~ 打开，防止 ~setopt~ 在 init 期间
+为了类型检查提前加载 ~custom~ 依赖。
 
 #+begin_src emacs-lisp :tangle early-init.el
 ;; Larger process output buffer (mainly for LSP).
@@ -240,13 +244,13 @@ frame 类型清空——在 macOS 上不需要解析 X11 的选项表，反过�
 
 ** 文件句柄与后缀
 
-`file-name-handler-alist` 在启动期间被清空、在 `emacs-startup-hook` 里恢复（用 `command-line-1`
-的 `:around` advice 控制时机）——每次 `require` / `load` 都会查这张表，清空后启动更快。这里保留
-了旧值并在恢复时 `delete-dups`，避免重复条目累积。
+~file-name-handler-alist~ 在启动期间被清空、在 ~emacs-startup-hook~ 里恢复（用 ~command-line-1~
+的 ~:around~ advice 控制时机）——每次 ~require~ / ~load~ 都会查这张表，清空后启动更快。这里保留
+了旧值并在恢复时 ~delete-dups~，避免重复条目累积。
 
-同一节里把 `vc-handled-backends` 先置 nil（VC 后端探测留到 `init-emacs-vcs`），再把
-`load-suffixes` 与 `load-file-rep-suffixes` 裁剪到最小；`before-init-hook` 里按平台补回
-`.dylib` / `.so` / `.dll`，否则动态模块加载会失败。
+同一节里把 ~vc-handled-backends~ 先置 nil（VC 后端探测留到 ~init-emacs-vcs~），再把
+~load-suffixes~ 与 ~load-file-rep-suffixes~ 裁剪到最小；~before-init-hook~ 里按平台补回
+~.dylib~ / ~.so~ / ~.dll~，否则动态模块加载会失败。
 
 #+begin_src emacs-lisp :tangle early-init.el
 ;; `file-name-handler-alist' is consulted on each call to `require', `load', or
@@ -289,13 +293,13 @@ frame 类型清空——在 macOS 上不需要解析 X11 的选项表，反过�
 
 ** 帧与工具栏
 
-`frame-inhibit-implied-resize 'force` 关掉隐式缩放；`default-frame-alist` 里把 tab-bar、menu-bar、
-tool-bar、滚动条全部预先压成 0，配合 `menu-bar-mode` / `tool-bar-mode` / `scroll-bar-mode` 的
-`nil`，避免用户在启动后要关两次。tab bar 由 `init-emacs-modeline` 稍后再打开，绕开 PGTK 下
+~frame-inhibit-implied-resize 'force~ 关掉隐式缩放；~default-frame-alist~ 里把 tab-bar、menu-bar、
+tool-bar、滚动条全部预先压成 0，配合 ~menu-bar-mode~ / ~tool-bar-mode~ / ~scroll-bar-mode~ 的
+~nil~，避免用户在启动后要关两次。tab bar 由 ~init-emacs-modeline~ 稍后再打开，绕开 PGTK 下
 echo area 被裁的问题。
 
-`tool-bar-setup` 的 `:override` advice 省掉工具栏初始化的工作——工具栏关着的时候那些工作全是白做。
-最后给 frame 起名 `home`，让 `select-frame-by-name` 和窗口管理器都能按名字找到它。
+~tool-bar-setup~ 的 ~:override~ advice 省掉工具栏初始化的工作——工具栏关着的时候那些工作全是白做。
+最后给 frame 起名 ~home~，让 ~select-frame-by-name~ 和窗口管理器都能按名字找到它。
 
 #+begin_src emacs-lisp :tangle early-init.el
 ;; Inhibit implicit frame resizing (font changes must not resize the frame).
@@ -328,11 +332,11 @@ echo area 被裁的问题。
 
 ** 启动画面与白闪
 
-`inhibit-startup-screen` 一族与两条 `display-startup-*` 的 `:override` advice 一起，确保没有启动
-屏、没有 echo area 提示。`inhibit-redisplay` 与 `inhibit-message` 在 `window-setup-hook` 之前为
-t，之后恢复并 `redraw-frame`（daemon 下跳过）——这一段专治深色环境下启动时的白闪。
+~inhibit-startup-screen~ 一族与两条 ~display-startup-*~ 的 ~:override~ advice 一起，确保没有启动
+屏、没有 echo area 提示。~inhibit-redisplay~ 与 ~inhibit-message~ 在 ~window-setup-hook~ 之前为
+t，之后恢复并 ~redraw-frame~（daemon 下跳过）——这一段专治深色环境下启动时的白闪。
 
-和 prot 的做法不同：他在 early-init 里就把 `default` face 的背景设成黑色来避免白闪，我们选择
+和 prot 的做法不同：他在 early-init 里就把 ~default~ face 的背景设成黑色来避免白闪，我们选择
 「先不重绘、等首帧前再恢复」。两种都能消除闪烁，后者不需要在 early-init 里判断明暗主题，代价是
 首帧出来得稍晚一点。
 
@@ -362,8 +366,8 @@ t，之后恢复并 `redraw-frame`（daemon 下跳过）——这一段专治深
 
 ** 包系统
 
-`package-enable-at-startup` 设为 nil：包全部由 straight 管理，不需要 `package.el` 在启动时扫描
-`elpa/`。这一条与 prot 相反——他用 `package.el`，所以显式设为 t 来利用包缓存。
+~package-enable-at-startup~ 设为 nil：包全部由 straight 管理，不需要 =package.el= 在启动时扫描
+=elpa/=。这一条与 prot 相反——他用 =package.el=，所以显式设为 t 来利用包缓存。
 
 #+begin_src emacs-lisp :tangle early-init.el
 ;; Inhibit package.el initialization: straight owns the packages.
@@ -372,19 +376,19 @@ t，之后恢复并 `redraw-frame`（daemon 下跳过）——这一段专治深
 
 * The main initialisation of Emacs (=init.el=)
 
-这是启动时读的第二个文件。它只做三件事：把 `core/` 放进 `load-path`、按依赖顺序 `require`
-各模块、以及挂一个启动耗时日志。它同样由本文件 tangle 生成（`:tangle init.el`）。
+这是启动时读的第二个文件。它只做三件事：把 =core/= 放进 ~load-path~、按依赖顺序 ~require~
+各模块、以及挂一个启动耗时日志。它同样由本文件 tangle 生成（=:tangle init.el=）。
 
 ** 加载顺序就是依赖顺序
 
-`init.el` 的 `require` 列表与本文件「模块」章节的顺序逐条一致。模块之间几乎不互相 `require`，
+=init.el= 的 ~require~ 列表与本文件「模块」章节的顺序逐条一致。模块之间几乎不互相 ~require~，
 所以顺序只在这一层有意义。真正敏感的几条边：
 
-- `init-emacs-util` 必须最先：`add-hook!` 与 `defadvice!` 是后面所有模块的语法基础。
-- `init-emacs-straight` 必须早于任何 `:straight` 声明，它负责 bootstrap。
-- `init-emacs-theme` 必须早于 `init-emacs-platform`：平台层在加载时就会调用
-  `+system-appearance-changed`，而 `+load-theme` 定义在 theme 层。
-- `init-emacs-edit` 必须早于 `init-emacs-prog`：`C-c r` 前缀键的归属在 edit 里确定，prog 往里补子键。
+- ~init-emacs-util~ 必须最先：~add-hook!~ 与 ~defadvice!~ 是后面所有模块的语法基础。
+- ~init-emacs-straight~ 必须早于任何 ~:straight~ 声明，它负责 bootstrap。
+- ~init-emacs-theme~ 必须早于 ~init-emacs-platform~：平台层在加载时就会调用
+  ~+system-appearance-changed~，而 ~+load-theme~ 定义在 theme 层。
+- ~init-emacs-edit~ 必须早于 ~init-emacs-prog~：~C-c r~ 前缀键的归属在 edit 里确定，prog 往里补子键。
 
 改标题顺序就是改加载顺序。要重排时先确认自己动到的是不是上面这几条约束边。
 
@@ -432,7 +436,7 @@ t，之后恢复并 `redraw-frame`（daemon 下跳过）——这一段专治深
 
 * The modules of this Emacs configuration
 
-这一章装全部 23 个模块，顺序与 ~init.el~ 的 ~require~ 列表逐条一致，一个模块一个节。
+这一章装全部 23 个模块，顺序与 =init.el= 的 ~require~ 列表逐条一致，一个模块一个节。
 模块内部一个包（或一件独立的事）一个小节，每节先讲这个包是什么、本配置怎么用它，然后紧跟这一节
 自己的 ~#+begin_src~ 块（绝大多数节恰好一块；一节里放了几个相邻的顶层 form 时，就是几块）。
 同一个模块的所有块 tangle 到同一个文件。
@@ -618,7 +622,7 @@ This command does the inverse of `fill-region'."
 
 *** The =init-emacs-util.el= section to provide the feature
 
-~provide~ 把 ~init-emacs-util~ 登记成一个 feature，~init.el~ 里那条 ~require~ 找的就是这个名字。每个模
+~provide~ 把 ~init-emacs-util~ 登记成一个 feature，=init.el= 里那条 ~require~ 找的就是这个名字。每个模
 块的最后一块都只做这一件事，所以它总是一个只有一行的块。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-util.el
@@ -638,11 +642,11 @@ straight.el 自称「purely functional 的包管理器」：每个包的来源�
 
 开头那段 ~setq~ 之所以必须写在 bootstrap 之前，是因为 straight 在加载 bootstrap 时才读这些变量，
 写在后面等于没写。其中三条值得解释：~straight-check-for-modifications nil~ 关掉「已装的包是否被
-本地改动」的扫描，启动省时间，代价是手动改过 ~straight/build/~ 里的文件不会被发现；
+本地改动」的扫描，启动省时间，代价是手动改过 =straight/build/= 里的文件不会被发现；
 ~straight-vc-git-default-clone-depth '(1 single-branch)~ 用浅克隆、只取默认分支，拉取快、体积
 小；~straight-disable-native-compile~ 只在没有原生编译能力的构建上为真，免得反复尝试。
 
-引导本身是官方 ~install.el~ 的套路：~straight/repos/straight.el/bootstrap.el~ 不存在时下载并求值
+引导本身是官方 =install.el= 的套路：=straight/repos/straight.el/bootstrap.el= 不存在时下载并求值
 安装脚本，存在时直接 ~load~，两种情况下都会把版本号 ~bootstrap-version~ 定成 7。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-straight.el
@@ -699,7 +703,7 @@ straight.el 自称「purely functional 的包管理器」：每个包的来源�
 
 本配置用它做增量加载：把延迟加载的工作摊到启动之后的一段时间里，节奏由 ~once-idle-timer~ 与
 ~once-incremental-run-interval~ 控制；~once-use-package-keyword-aliases~ 让后续模块可以写
-~:require-incrementally~，不必每个包都改写法。~:files~ 里多带的 ~once-use-package/*.el~ 就是那个
+~:require-incrementally~，不必每个包都改写法。~:files~ 里多带的 =once-use-package/*.el= 就是那个
 关键字别名层。daemon 下不启用增量加载——那种会话只启动一次，没有「启动之后」可摊。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-straight.el
@@ -750,12 +754,12 @@ straight.el 自称「purely functional 的包管理器」：每个包的来源�
 
 *** The =init-emacs-core.el= section for ~no-littering~
 
-~no-littering~ 把各包散落的配置文件与持久数据统一改道到 ~etc/~ 与 ~var/~ 两个目录，并尽量给出描
+~no-littering~ 把各包散落的配置文件与持久数据统一改道到 =etc/= 与 =var/= 两个目录，并尽量给出描
 述性的文件名；README 里把它比作「路径主题」——像 color-theme 换颜色那样换路径。它只负责把这些变量
 指向别处，不迁移已有的旧文件。
 
 本配置里它带着 ~:demand t~ 排在文件最前面，后面所有「写到哪」的决定都建立在它之上：backup、
-auto-save、elpa、ispell 个人词典、tramp-rpc 与 ghostel 的缓存目录，全部改道到 ~var/~ 下。顺序在
+auto-save、elpa、ispell 个人词典、tramp-rpc 与 ghostel 的缓存目录，全部改道到 =var/= 下。顺序在
 这里是有语义的——在它之前调用 ~no-littering-expand-var-file-name~ 只会报未定义。最后那句
 ~no-littering-theme-backups~ 把备份与 auto-save 也接进这条路径。
 
@@ -1000,7 +1004,7 @@ mode 真的开着——定时器归属跟着模式走，而不是跟着变量走
 ~recentf~ 也是内置库：维护最近打开的文件列表并跨 session 保存，三种访问方式是 ~recentf-open~、
 File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这里绑到 ~C-x C-r~）。
 
-~recentf-exclude~ 本质上是「什么不该出现在最近文件里」的清单（缓存、TAGS、~var/folders~、远程路
+~recentf-exclude~ 本质上是「什么不该出现在最近文件里」的清单（缓存、TAGS、=var/folders=、远程路
 径、自己的保存文件），其中两条是函数而不正则：按目录判断 ~package-user-dir~ 与 no-littering 的两
 个目录。~recentf-filename-handlers~ 里 ~substring-no-properties~ 必须排第一，注释解释了原因——文
 本属性会撑大保存文件。最后一条 hook 让 dired 访问的目录也进列表。
@@ -1210,7 +1214,7 @@ MessagePack-RPC 通信，把「多次 shell 往返」压成一次批量请求，
 
 本配置把 ~tramp-default-method~ 直接改成 ~"rpc"~，于是不写方法名的远程路径默认就走 rpc；
 ~tramp-backup-directory-alist~ 沿用本地备份目录的落点，~remote-file-name-inhibit-cache~ 给一个 60
-秒的缓存窗口。~tramp-rpc~ 自己的缓存目录经 ~no-littering-expand-var-file-name~ 落到 ~var/~ 下，
+秒的缓存窗口。~tramp-rpc~ 自己的缓存目录经 ~no-littering-expand-var-file-name~ 落到 =var/= 下，
 并在加载时 ~make-directory~；~tramp-rpc-deploy-auto-deploy~ 与
 ~tramp-rpc-deploy-git-build-policy 'release~ 决定远端没有预编译二进制时自动部署、且优先取 release
 构建。
@@ -1379,7 +1383,7 @@ Eshell 是内置的 Emacs 原生 shell：Commentary 说它用起来像 shell mod
 的「进程」就是 Emacs 自己，没有子 shell 通过 comint 通信。
 
 这一块近 200 行，是整个模块最大的一块，内容是四件事：~:bind~ / ~:config~ 里的交互参数与两个入口
-（~C-`~ 与 ~C-·~）、~+eshell-toggle~ 的 popup 窗口管理、一组 ~eshell/~ 前缀的命令与 alias、以及
+（~C-`~ 与 ~C-·~）、~+eshell-toggle~ 的 popup 窗口管理、一组 =eshell/= 前缀的命令与 alias、以及
 两条 hook（首次进入时定义 alias、目录变化时同步 buffer 名）。
 
 它保持一个块，不按话题拆开：这四件事都在同一个 ~use-package~ form 里，拆到 form 中间会让每个块单
@@ -1609,7 +1613,7 @@ zsh-syntax-highlighting 与 fish 的原生高亮。
 ~eshell-z~ 是命令行工具 ~z~ 的 Emacs 移植：记录你去过哪些目录、去过多少次，凭 frecency 跳到常用
 目录，并且可以和 ~z~ 共用同一份数据文件。
 
-本配置只留 ~eshell/z~ 一个入口（~:commands~），不设任何变量：数据文件路径与 ~z~ 的默认约定一致时
+本配置只留 =eshell/z= 一个入口（~:commands~），不设任何变量：数据文件路径与 ~z~ 的默认约定一致时
 才谈得上共用，而这里并没有改它。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-core.el
@@ -1722,7 +1726,7 @@ Ghostel 是基于 ~libghostty-vt~（Ghostty 的 VT 引擎）的终端模拟器�
 真彩、Kitty 键盘与图形协议、超链接、桌面通知、进度上报，shell 集成的目录跟踪与提示符导航对
 bash/zsh/fish/nushell 开箱可用；它需要带动态模块支持的新版 Emacs。
 
-这一块几乎全是绕开终端与窗口约定的 hack。原生模块目录经 no-littering 落到 ~var/~ 下，
+这一块几乎全是绕开终端与窗口约定的 hack。原生模块目录经 no-littering 落到 =var/= 下，
 ~auto-install 'download~ 让首次使用时下载预编译模块；~C-x m~ 打开 ghostel，semi-char 模式下把
 ~C-k~ 换成「先 kill-ring-save 再发 C-k」、把 ~M-p~ / ~M-n~ 仿成 eshell 的历史键。两条
 ~project-prefix-map~ 绑定挂在 ~project~ 上，所以 ghostel 也出现在 ~C-x p~ 菜单里。~:config~ 里那
@@ -1822,9 +1826,9 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
   (setq kkp-restore-legacy-keys-around-subprocesses t))
 #+end_src
 
-*** The =init-emacs-core.el= section for ~term/xterm~
+*** The =init-emacs-core.el= section for =term/xterm=
 
-~term/xterm~ 是内置库，负责在 xterm 兼容终端里多问几个能力查询（extra capabilities），包括
+=term/xterm= 是内置库，负责在 xterm 兼容终端里多问几个能力查询（extra capabilities），包括
 ~modifyOtherKeys~、~reportBackground~、~getSelection~ / ~setSelection~。
 
 ~xterm-extra-capabilities~ 把四项显式列出来，不去猜终端；~xterm-set-window-title t~ 让终端标题跟
@@ -1939,7 +1943,7 @@ Timer Must Run"。
 ~ashen-night~ 是炭黑底、dusty rose 与 gold/periwinkle/lilac 作强调色，~ashen-day~ 是暖白底、
 teal-gray 文字配 dusty rose 强调。调色板按语义 key 定义，可以在运行时覆盖而不必改源码。
 
-~use-package ashen~ 带 ~:demand t~ 且必须留在文件最前面：这个声明把 ~straight/build/ashen~ 挂上
+~use-package ashen~ 带 ~:demand t~ 且必须留在文件最前面：这个声明把 =straight/build/ashen= 挂上
 ~custom-theme-load-path~ 与 ~load-path~，而同一文件底部的 ~+load-theme~ 通过 ~tty-setup-hook~ 上
 的 ~:unless-daemonp-call-immediately~ 在加载时就会真的跑一次。第一次 ~load-theme~ 必须已经能找到
 ashen 目录，所以这个声明既不能挪到 ~init-emacs-ui~，也不能挪到文件后面——这是全文少数「位置本身就是正确
@@ -2347,7 +2351,7 @@ daemon 启动时没有窗口可画。
 
 本配置只在 ~prog-mode~ 打开它，连字表按箭头、标签、运算符、注释四组抄自上游示例（注释里写的是
 MonoLisaCode，实际字体是 PragmataPro Liga，表没动）。Org 必须排除在外：Org 用 text properties 把强
-调定界符藏起来，连字仍可能把「看不见的定界符」和可见内容合成一个字形，于是 ~=path/**=~ 的结尾会漏
+调定界符藏起来，连字仍可能把「看不见的定界符」和可见内容合成一个字形，于是 ==path/**== 的结尾会漏
 出半个定界符。这是少数「渲染层的问题只能在配置层绕开」的例子。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-ui.el
@@ -2580,7 +2584,7 @@ macOS 的外观只有一条权威来源：~defaults read -g AppleInterfaceStyle~
 
 *** The =init-emacs-platform.el= section to provide the feature
 
-~provide~ 在最后，两个 ~when~ 之后：别的平台上这个模块空加载，但 feature 一样登记，~init.el~ 的
+~provide~ 在最后，两个 ~when~ 之后：别的平台上这个模块空加载，但 feature 一样登记，=init.el= 的
 ~require~ 不会因为平台不同而失败。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-platform.el
@@ -2988,13 +2992,13 @@ Customize 都不会把全局 header line 打开，于是 header line 只出现�
 
 *** The =init-emacs-modeline.el= section for ~breadcrumb~
 
-README 说 breadcrumb 是「一串短字符串，告诉你在这棵大树的哪里」，它向 ~imenu.el~ 与 ~project.el~ 要
+README 说 breadcrumb 是「一串短字符串，告诉你在这棵大树的哪里」，它向 =imenu.el= 与 =project.el= 要
 信息；~breadcrumb-mode~ 是全局模式，会保守地只在有 project 的地方打开；~breadcrumb-local-mode~ 是逐
 buffer 的版本。
 
 本配置只做安装与外观：三个 face 调成与主题一致的粗细和颜色（project 的 base 与 leaf、imenu 的
 leaf），四个变量定分隔符（~⋅~）、两条长度上限（占窗口的比例，不是字符数）与 5 秒的空闲延迟。写变量
-时必须用全名 ~breadcrumb-*~：~breadcrumb.el~ 末尾有一段 file-local 的 ~read-symbol-shorthands~ 把
+时必须用全名 ~breadcrumb-*~：=breadcrumb.el= 末尾有一段 file-local 的 ~read-symbol-shorthands~ 把
 ~bc-~ 映射成 ~breadcrumb-~，那是读取那份源码时的展开；配置在另一个文件里读，写短前缀只会得到一个不
 存在的变量。
 
@@ -3195,9 +3199,9 @@ configuration，所以它是工作区，不是 buffer 列表。~tab-bar-format~ 
 ~vertico-insert~，这里改成 ~minibuffer-complete~：补光标处的公共前缀，而不是把整个候选插进
 prompt。~C-RET~ 绑 ~vertico-exit-input~，用来「输入到此为止」，既不进候选也不补全。
 
-这一块同时留着 tangle 文件的 =-*- lexical-binding: t -*-= 与 ~;;; Minibuffer~ 分组注释，因为它们
+这一块同时留着 tangle 文件的 ~-*- lexical-binding: t -*-~ 与 ~;;; Minibuffer~ 分组注释，因为它们
 必须位于文件最前面。注释里那句 recipe 说明是本地踩坑记录：MELPA 的 recipe 已经包含
-~extensions/*.el~，再自定义 ~:files~ 会让 straight 看到同一个包的两份不同 recipe 并告警。
+=extensions/*.el=，再自定义 ~:files~ 会让 straight 看到同一个包的两份不同 recipe 并告警。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-completion.el
 ;;; -*- lexical-binding: t -*-
@@ -3220,7 +3224,7 @@ prompt。~C-RET~ 绑 ~vertico-exit-input~，用来「输入到此为止」，既
 
 *** The =init-emacs-completion.el= section for ~vertico-directory~
 
-~vertico-directory~ 是 vertico 仓库 ~extensions/~ 下的扩展，README 的扩展清单里说它是「Ido 风格
+~vertico-directory~ 是 vertico 仓库 =extensions/= 下的扩展，README 的扩展清单里说它是「Ido 风格
 的目录导航命令」。三个动作各占一个键：~RET~ 进入目录（而不是接受当前候选）、~DEL~ 删掉路径里的一
 个字符、~M-DEL~ 删掉一整段。README 给出的示例配置就是这三行，这里照抄，没有额外调整。
 
@@ -3254,7 +3258,7 @@ prompt。~C-RET~ 绑 ~vertico-exit-input~，用来「输入到此为止」，既
 配置三处：hook 挂在 ~vertico-mode~ 上，随主模式一起开关；~vertico-buffer-display-action~ 指定
 「在下方按半屏高度分窗」，候选再多也不会把当前窗口挤成一行；一条 ~:before~ advice 在
 ~vertico-buffer--setup~ 之前调 ~mode-line-invisible-mode~，让候选 buffer 不带模式行。advice 名字
-里的 =disbale= 是原代码的拼写错误，保留原样以免动代码。
+里的 ~disbale~ 是原代码的拼写错误，保留原样以免动代码。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-completion.el
 (use-package vertico-buffer
@@ -3490,7 +3494,7 @@ UI 与 Orderless 的匹配。
 *** The =init-emacs-completion.el= section for ~avy-embark-collect~
 
 这个包没有独立仓库，它是 embark 仓库附带的一个文件，所以 recipe 用 ~:files~ 只取
-~avy-embark-collect.el~。作用是把 avy 的字母跳转装进 Embark Collect buffer：~j~ 选中、~J~ 对选中
+=avy-embark-collect.el=。作用是把 avy 的字母跳转装进 Embark Collect buffer：~j~ 选中、~J~ 对选中
 项执行动作。
 
 本配置 ~:after (embark avy)~，两个依赖都在别处装好；只绑这两个键，没有改任何状态。
@@ -3592,7 +3596,7 @@ eshell、text，加 agent-shell 的两个 mode），不做全局；~eshell-mode~
 
 *** The =init-emacs-completion.el= section for ~corfu-history~
 
-corfu 仓库 ~extensions/~ 下的扩展。README 说它记住选过的候选并按历史排序，于是同一个前缀下常用的
+corfu 仓库 =extensions/= 下的扩展。README 说它记住选过的候选并按历史排序，于是同一个前缀下常用的
 那个会浮到前面。
 
 本配置在 ~:config~ 里直接开 ~corfu-history-mode~，并在 ~savehist~ 载入后把 ~corfu-history~ 变量
@@ -3664,7 +3668,7 @@ capf」，也能把 Company 的 backend 转成 capf，所以配 corfu、company 
 明它接进补全的标准方式是 ~completion-at-point-functions~。
 
 接入就发生在这一块。~+tempel-setup-capf~ 用 ~cape-capf-trigger~ 把 ~tempel-complete~ 包成「输入
-~/~ 才触发」的 capf，以深度 -90 挂进 ~completion-at-point-functions~——负数排在前面，触发符一打出
+=/= 才触发」的 capf，以深度 -90 挂进 ~completion-at-point-functions~——负数排在前面，触发符一打出
 来就轮到它。~+tempel-trigger-capf~ 缓存这个闭包是有原因的：每调一次 ~cape-capf-trigger~ 都会造一
 个新函数对象，而 ~add-hook~ 按对象去重，逐 buffer 重造会在同一个 hook 上叠出一串等价闭包。
 
@@ -3711,7 +3715,7 @@ capf」，也能把 Company 的 backend 转成 capf，所以配 corfu、company 
 ~dabbrev~ 是内置的动态缩写补全，从 buffer 里就地取词，上面 ~cape~ 的 ~cape-dabbrev~ 也是拿它当后
 端。
 
-本配置只改一条：~dabbrev-ignored-buffer-regexps~ 排除文件名形如 ~.pdf~ / ~.jpeg~ / ~.png~ 的
+本配置只改一条：~dabbrev-ignored-buffer-regexps~ 排除文件名形如 =.pdf= / ~.jpeg~ / ~.png~ 的
 buffer。二进制内容里没有可用的词，扫一遍只是浪费。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-completion.el
@@ -3722,7 +3726,7 @@ buffer。二进制内容里没有可用的词，扫一遍只是浪费。
 
 *** The =init-emacs-completion.el= section to provide the feature
 
-~provide~ 把 ~init-emacs-completion~ 登记成 feature，~init.el~ 那条 ~require~ 找的就是这个名字。
+~provide~ 把 ~init-emacs-completion~ 登记成 feature，=init.el= 那条 ~require~ 找的就是这个名字。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-completion.el
 (provide 'init-emacs-completion)
@@ -4156,7 +4160,7 @@ buffer 少两行提示，~flyspell-use-meta-tab nil~ 把 ~M-TAB~ 让给别处，
 ~+electric-pair-shell-setup~，先设 ~electric-pair-field-search-size~ 再开——shell buffer 里进程输
 出与输入在同一个 buffer，配对只该在输入域里做。
 
-需要记一笔的事实：~electric-pair-field-search-size~ 在 Emacs 31.1 的 ~electric.el~ 里并不存在
+需要记一笔的事实：~electric-pair-field-search-size~ 在 Emacs 31.1 的 =electric.el= 里并不存在
 （~boundp~ 为 nil，源码里也搜不到），~setq-local~ 只是造了一个孤立的 buffer-local 变量。实际生效
 的是紧跟的 ~(electric-pair-mode 1)~。这一行保留原样，它记录的意图仍然成立，只是这个变量在这版
 Emacs 上不参与。
@@ -4918,11 +4922,11 @@ README：「Provide a dired-mode interface for fd's result. Same functionality a
 
 *** The =init-emacs-dired.el= section for ~dired-hacks~
 
-README 的定位：「Collection of useful dired additions… splitting all the functionality into separate mutually independent packages」，共用的辅助函数单独抽成 ~dired-hacks-utils~。本配置用的是 roife 的 fork（~fix/collapse-subtree~ 分支）而不是上游 Fuco1 的仓库。四个子包是同一条 ~use-package dired-hacks~ 里 ~:init~ 下的嵌套 form，拆到 form 中间会让每块单独不可求值，所以它们共用这一块、这一节。
+README 的定位：「Collection of useful dired additions… splitting all the functionality into separate mutually independent packages」，共用的辅助函数单独抽成 ~dired-hacks-utils~。本配置用的是 roife 的 fork（=fix/collapse-subtree= 分支）而不是上游 Fuco1 的仓库。四个子包是同一条 ~use-package dired-hacks~ 里 ~:init~ 下的嵌套 form，拆到 form 中间会让每块单独不可求值，所以它们共用这一块、这一节。
 
 ~dired-subtree~：~TAB~ 就地展开/收起子树。两条 custom 都改默认值——~dired-subtree-use-backgrounds nil~（默认 t，关掉逐层背景色：那些深度 face 是硬编码的深绿，跟不了主题）、~dired-subtree-line-prefix "  |  "~（默认两个空格，这里加竖线让层级可见）。留下的是「结构信息保留、硬编码颜色丢掉」。
 
-~f~ 是被 ~dired-collapse~ 依赖的（~dired-collapse.el~ 直接 ~require~ 它），代码里带一条 ~TODO: remove it~，说明作者认为它迟早能去掉。~dired-collapse~ 把只有单条子链的目录折叠成一行，~dired-collapse-fontify nil~（默认 t）关掉阴影 overlay——同样因为它拖进硬编码颜色，而不是跟随主题。~dired-narrow~ 给 ~;~ 绑 ~dired-narrow-fuzzy~，按输入增量过滤当前列表。
+~f~ 是被 ~dired-collapse~ 依赖的（=dired-collapse.el= 直接 ~require~ 它），代码里带一条 ~TODO: remove it~，说明作者认为它迟早能去掉。~dired-collapse~ 把只有单条子链的目录折叠成一行，~dired-collapse-fontify nil~（默认 t）关掉阴影 overlay——同样因为它拖进硬编码颜色，而不是跟随主题。~dired-narrow~ 给 ~;~ 绑 ~dired-narrow-fuzzy~，按输入增量过滤当前列表。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-dired.el
 ;; [dired-hacks] Several additional extensions for dired
@@ -5230,7 +5234,7 @@ Diagnostics for all files are published separately for project listings."
 
 内置的 LSP 客户端：按 project + major mode 拉起语言服务器，把服务器的能力接到 ~xref~、~flymake~、~eldoc~、~completion-at-point~ 上——这正是 ~eglot~ 命令 docstring 列的四条。本配置把它做成「打开文件就自动连」的形状。
 
-~+eglot-auto-start-modes~ 是唯一的 mode 名单，两处消费（这里与 ~flymake~ 那一节）：~eglot-ensure~ 挂在名单里每个 mode 的 hook 上，于是不需要手敲 ~M-x eglot~。~eglot-mode-map~ 里加了三个键：~M-<return>~ 代码动作、~M-/~ 找类型定义、~M-?~ 找引用。face 上把 ~eglot-highlight-symbol-face~ 改成只加下划线（上游的 defface 只 ~:inherit bold~）。
+~+eglot-auto-start-modes~ 是唯一的 mode 名单，两处消费（这里与 ~flymake~ 那一节）：~eglot-ensure~ 挂在名单里每个 mode 的 hook 上，于是不需要手敲 ~M-x eglot~。~eglot-mode-map~ 里加了三个键：~M-<return>~ 代码动作、=M-/= 找类型定义、~M-?~ 找引用。face 上把 ~eglot-highlight-symbol-face~ 改成只加下划线（上游的 defface 只 ~:inherit bold~）。
 
 设置项能看出取向：事件 buffer 的 ~:size~ 从默认 2,000,000 改成 0（不保留历史，只看当前会话）；~eglot-extend-to-xref~、~eglot-autoshutdown~ 都从 nil 打开（前者让跳进库文件也算同一会话，后者在最后一个被管 buffer 关闭时关掉服务器）；~eglot-documentation-renderer~ 指定 ~markdown-ts-view-mode~（~init-emacs-writing~ 装的 markdown 渲染）；~eglot-code-action-indications~ 从默认的 ~(eldoc-hint left-fringe margin)~ 关成 nil，即不在 eldoc、fringe、margin 里提示「这里有代码动作」。
 
@@ -5362,7 +5366,7 @@ README：「Simple shim adapter to use the tempel templating library with eglot,
 
 *** The =init-emacs-prog.el= section for ~consult-eglot~
 
-README：「A consulting-read interface for eglot… provides a front-end interface for the ~workspace/symbols~ LSP procedure call.」也就是用 consult 的界面浏览整个工作区的符号，而不是只看当前 buffer 的 imenu。
+README：「A consulting-read interface for eglot… provides a front-end interface for the =workspace/symbols= LSP procedure call.」也就是用 consult 的界面浏览整个工作区的符号，而不是只看当前 buffer 的 imenu。
 
 用法只有一条键：在 ~eglot-mode-map~ 里把 ~xref-find-apropos~ 重映射到 ~consult-eglot-symbols~。~:after consult eglot~ 保证两边都在，于是 eglot 管着的 buffer 里「按名字找符号」直接走服务器。
 
@@ -5460,7 +5464,7 @@ README：「quickrun.el is Emacs port of quickrun.vim… a extension to execute 
 
 *** The =init-emacs-prog.el= section for ~dape~
 
-README：「=Dape= is a debug adapter client for Emacs. The debug adapter protocol, much like its better-known counterpart, the language server protocol, aims to establish a common API for programming tools… it provides a standardized interface for debuggers.」用 ~dape-configs~ 里现成的配置起一个调试会话。
+README：「~Dape~ is a debug adapter client for Emacs. The debug adapter protocol, much like its better-known counterpart, the language server protocol, aims to establish a common API for programming tools… it provides a standardized interface for debuggers.」用 ~dape-configs~ 里现成的配置起一个调试会话。
 
 两条设置都短：~dape-buffer-window-arrangement 'right~（默认 ~left~，调试界面开在右侧，左侧留给源码）、~dape-start-hook~ 上挂 ~save-some-buffers~（开始调试前先把该存的文件存掉——调试器读的是磁盘上的文件，不是 buffer）。
 
@@ -5550,7 +5554,7 @@ README：「This package provides fast, flexible indentation guide bars in Emacs
 
 *** The =init-emacs-prog.el= section for ~envrc~
 
-README：「A GNU Emacs library which uses the direnv tool to determine per-directory/project environment variables and then set those environment variables on a per-buffer basis」，并特别说明它与 ~direnv.el~ 的区别——后者反复改全局环境，~envrc.el~ 把环境存成每个 buffer 自己的局部变量。
+README：「A GNU Emacs library which uses the direnv tool to determine per-directory/project environment variables and then set those environment variables on a per-buffer basis」，并特别说明它与 =direnv.el= 的区别——后者反复改全局环境，=envrc.el= 把环境存成每个 buffer 自己的局部变量。
 
 用法只有 ~:hook (emacs-startup . envrc-global-mode)~。于是每个 buffer 的进程环境来自它所在目录的 ~.envrc~，跨项目跑 linter、编译器时各用各的版本。代码的分组注释写的是 ~[direnv]~，~use-package~ 的名字是 ~envrc~——两者指的是同一个包。
 
@@ -5585,11 +5589,11 @@ README：「Logview major mode for Emacs provides syntax highlighting, filtering
 
 *** The =init-emacs-prog.el= section for the Rust helpers
 
-这一块开头那行 ~;;; -*- lexical-binding: t -*-~ 是文件中段的历史遗留。文件局部变量 cookie 只在文件第一行（或 ~Local Variables~ 块里）生效，出现在第三处不生效，但它是原来那段代码的一部分，按「不重排代码」的规矩原位保留——所以它会第二次出现在 tangle 出来的 ~core/init-emacs-prog.el~ 里，位置在文件中间。
+这一块开头那行 ~;;; -*- lexical-binding: t -*-~ 是文件中段的历史遗留。文件局部变量 cookie 只在文件第一行（或 ~Local Variables~ 块里）生效，出现在第三处不生效，但它是原来那段代码的一部分，按「不重排代码」的规矩原位保留——所以它会第二次出现在 tangle 出来的 =core/init-emacs-prog.el= 里，位置在文件中间。
 
 两个命令都只服务 rust-analyzer，也都不是包。~cargo-xtask-install-server~ 从当前目录往上找 ~crates~ 目录，确认正处在 rust-analyzer 仓库里才跑 ~cargo xtask install --server --mimalloc~；它走 ~compile~，所以输出回到 compilation buffer，也就经过本模块第一节那条 flymake 桥。它绑在 ~rust-mode-map~ 的 ~C-c C-x C-i~ 上，且只在 ~rust-mode~ 加载后执行。
 
-~restart-eglot-and-switch-logs~ 按项目名拼出 eglot 的事件 buffer 名字（~*EGLOT (<项目>/(rust-ts-mode rust-mode)) events*~）：那个 buffer 已经显示在某个窗口就复用，否则右侧新开一个；然后 ~call-interactively~ 走一遍 ~eglot~ 重启，切到日志窗口、杀掉旧日志、再切回来。这两条都是「在没有 UI 的地方补一个入口」。
+~restart-eglot-and-switch-logs~ 按项目名拼出 eglot 的事件 buffer 名字（=*EGLOT (<项目>/(rust-ts-mode rust-mode)) events*=）：那个 buffer 已经显示在某个窗口就复用，否则右侧新开一个；然后 ~call-interactively~ 走一遍 ~eglot~ 重启，切到日志窗口、杀掉旧日志、再切回来。这两条都是「在没有 UI 的地方补一个入口」。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-prog.el
 ;;; -*- lexical-binding: t -*-
@@ -5672,7 +5676,7 @@ README：「Logview major mode for Emacs provides syntax highlighting, filtering
 
 *** The =init-emacs-langs.el= section for ~csv-mode~
 
-上游没有 README，据源文件头：~Major mode for editing comma/char separated values~——把
+上游没有 README，据源文件头：=Major mode for editing comma/char separated values=——把
 csv/tsv 当表格编辑（按字段移动、对齐列、排序）。
 
 本配置只写 ~:straight t~，没有任何设置。它的价值是给这类文件一个正经 mode 并自带对齐命令；
@@ -5843,7 +5847,7 @@ README 是中文的：在 Emacs 里直接编辑、渲染、运行 ~.ipynb~，界
 原生 widgets 拼成、不依赖浏览器；~C-c '~ 把整份 notebook 的 Python 代码放进普通 Python mode
 （于是 Eglot 也能用）。它要求 Emacs 31 与 Python 3.11+ 的 kernel 桥接。
 
-recipe 指向 ~roife/jupyter.el~；~:mode~ 接管 ~.ipynb~，~:commands~ 让 ~jupyter-notebook-new~ 延迟
+recipe 指向 =roife/jupyter.el=；~:mode~ 接管 ~.ipynb~，~:commands~ 让 ~jupyter-notebook-new~ 延迟
 加载，~jupyter-notebook-formula-scale 2.0~ 把公式预览放大到两倍（默认 nil，即用 Emacs 的常规缩放）。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-langs.el
@@ -5924,9 +5928,9 @@ README：编辑「HTML 里嵌 CSS/JS/模板块」这类文件的 major mode，�
 （PHP、JSP、Django、Twig、Jinja、Mustache、ERB、Blade、svelte、ejs…）。
 
 ~:mode~ 里那 15 条正则就是照这份清单写的，从 ~.erb~、~.svelte~、~.jinja2~ 一直到
-~templates/*.php~：只有它认得 HTML/CSS/JS 三段混排时各自的缩进。三个 offset 全设 2，另开
+=templates/*.php=：只有它认得 HTML/CSS/JS 三段混排时各自的缩进。三个 offset 全设 2，另开
 ~web-mode-enable-html-entities-fontification~（实体上色）与 ~web-mode-auto-close-style 1~
-（默认已是 1，含义是只在 ~</~ 处自动补全结束标签；写明是因为它决定敲完标签会不会多出半截）。
+（默认已是 1，含义是只在 =</= 处自动补全结束标签；写明是因为它决定敲完标签会不会多出半截）。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-langs.el
 ;; Major mode for editing web templates
@@ -6109,7 +6113,7 @@ README：Typst 的 tree-sitter major mode（最低 Emacs 29）。上游已迁到
 是可能滞后的镜像。
 
 两处设置：~typst-ts-lsp-download-path~ 从默认的 ~locate-user-emacs-file ".cache"~ 挪到 no-littering
-的 ~var/lsp/~ 下；~typst-ts-watch-options "--open"~ 让 ~typst-ts-watch~ 编译后自动打开 PDF
+的 =var/lsp/= 下；~typst-ts-watch-options "--open"~ 让 ~typst-ts-watch~ 编译后自动打开 PDF
 （默认是空串）。下一行 ~make-directory~ 严格说冗余——上游 ~typst-ts-lsp-download-binary~ 自己会先
 建父目录——但它是幂等的，留着表示「这个目录属于本配置的 var 树」。
 
@@ -6213,7 +6217,7 @@ README：编辑 Mermaid 图的 major mode（流程图、时序图的语法高亮
 
 这个模块只管「Org 作为文档格式长什么样」：链接、源码块、表格、折叠、预览、导出。任务流（TODO、
 refile、capture、agenda）在 ~init-emacs-agenda~。所以这里几乎全是变量，逻辑只有几段 hook 与三个小函数。
-~org-directory~ 定在 =~/org/= 是一个对外前提：~init-emacs-agenda~ 的文件名全部由它推出。
+~org-directory~ 定在 ==/org/= 是一个对外前提：=init-emacs-agenda~ 的文件名全部由它推出。
 
 下面 10 个块，一块一个包：~org-persist~、~org~（最大的一块，181 行）、~org-element~、~ob-mermaid~、
 ~org-appear~、~org-fragtog~、~org-modern~、~ox~、~org-typst-preview~，最后是 ~provide~。
@@ -6242,7 +6246,7 @@ refile、capture、agenda）在 ~init-emacs-agenda~。所以这里几乎全是�
 *** The =init-emacs-org.el= section for ~org~
 
 Org 的 README 自述是「一个记录笔记、写文档、当计算笔记本做文学编程、维护待办与规划项目的大
-major mode，用纯文本」。本配置用的是 straight 从 ~emacs-straight/org-mode~ 取的版本（recipe 带
+major mode，用纯文本」。本配置用的是 straight 从 =emacs-straight/org-mode= 取的版本（recipe 带
 ~:pre-build~ 与 ~:build (:not autoloads)~），而不是内置那份；于是 Org 的升级与 Emacs 的升级解耦。
 
 两处在 ~:init~ 里，都改变全局默认：~org-modules '(org-habit)~——默认会加载 11 个 ~ol-*~ 链接模块
@@ -6555,7 +6559,7 @@ README.org：光标进入 LaTeX 片段时关掉预览、离开时再打开，等
 *** The =init-emacs-org.el= section for ~org-modern~
 
 README.org：用 font-lock 与 text properties 给 Org buffer 上「现代样式」，标题、关键字、表格、源码块
-都能单独开关（每个语法元素在 =org-modern= 自定义组里各有一项）。
+都能单独开关（每个语法元素在 ~org-modern~ 自定义组里各有一项）。
 
 两个 hook 让它同时管 Org 与 Agenda：~org-mode~ 开 ~org-modern-mode~，~org-agenda-finalize~ 调
 ~org-modern-agenda~，于是 agenda 的星号与标签样式与正文一致。样式上只改一处：
@@ -6640,8 +6644,8 @@ README.org：用与 ~org-latex-preview~ 相同的界面渲染原生 Typst 公式
 
 这一节是任务数据模型，不是 Agenda 界面：TODO 关键字、状态变化的记录方式、标签、归档位置。
 
-关键字是一条 sequence：~TODO/NEXT/DOING/WAIT/SOMEDAY | DONE/CANCELED~，没有为每个项目单开流程。
-记号本身带语义：~WAIT(w@/!)~ 的 ~@~ 记时间、~!~ 强制加 note，~DOING(g!)~ 与 ~DONE(d!)~ 也强制
+关键字是一条 sequence：=TODO/NEXT/DOING/WAIT/SOMEDAY | DONE/CANCELED=，没有为每个项目单开流程。
+记号本身带语义：=WAIT(w@/!)= 的 ~@~ 记时间、~!~ 强制加 note，~DOING(g!)~ 与 ~DONE(d!)~ 也强制
 记录。配上 ~org-log-into-drawer t~ 与 ~org-log-done 'time~（默认分别是 nil 与 nil），所有状态变化
 都进 ~:LOGBOOK:~ 而不是漂在正文里；~org-log-reschedule~、~org-log-redeadline~ 同理记时间。
 ~org-tag-alist~ 只有 ~@home~、~@work~ 两个互斥标签加 ~note~；~org-deadline-warning-days 3~ 把默认
@@ -6649,7 +6653,7 @@ README.org：用与 ~org-latex-preview~ 相同的界面渲染原生 Typst 公式
 
 归档是这一节唯一有逻辑的地方：全局 ~org-archive-location~ 是 ~"%s_archive::* Archived"~，
 而 ~+org-set-project-archive-location~ 在 ~org-mode-hook~ 里把它改成 buffer-local 的
-~archives/<文件名>-<年>.org::* Archived~。代价是归档目标随年份变化（跨年回看得翻两个文件），
+=archives/<文件名>-<年>.org::* Archived=。代价是归档目标随年份变化（跨年回看得翻两个文件），
 收益是任何单个归档文件都不会无限长；它只在 ~buffer-file-name~ 存在时动手，临时 buffer 里的 Org
 不会被误设。
 
@@ -6720,7 +6724,7 @@ README.org：用与 ~org-latex-preview~ 相同的界面渲染原生 Typst 公式
 
 *** The =init-emacs-agenda.el= section for ~org-capture~
 
-源文件 Commentary：~org-remember.el~ 的替代实现，流程更精简、目标类型更多。~:require-incrementally
+源文件 Commentary：=org-remember.el= 的替代实现，流程更精简、目标类型更多。~:require-incrementally
 (org-agenda t)~ 说明它依赖 agenda 那一批子文件。
 
 9 条模板按「先收后理」组织：~t~/~n~ 进 =inbox.org= 当任务或笔记（都带 ~:CREATED: %U~ 与
@@ -6729,7 +6733,7 @@ README.org：用与 ~org-latex-preview~ 相同的界面渲染原生 Typst 公式
 ~:APPT_WARNTIME:~ 的提醒（后者与下一节的 appt 相扣），~R~ 是重复提醒——它用 ~%(...)~ 现场问
 「第一次什么时候、间隔多久」，选项就是 Org 的重复语法 ~.+1d~、~++1w~、~++1m~ 等，所以重复语义仍然
 是 Org 自己的；~s~ 进 someday，~e~ 进 calendar 当事件。每条都带 ~:empty-lines 1~，连续 capture
-时条目之间不会黏在一起。~org-default-notes-file~ 指向 =inbox.org~，因此 ~t~/~n~/~r~ 都不写死路径。
+时条目之间不会黏在一起。~org-default-notes-file~ 指向 =inbox.org=，因此 ~t~、~n~、~r~ 都不写死路径。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-agenda.el
 ;; [org-capture]
@@ -6798,8 +6802,8 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
 入口是自定义命令里的 ~d~（Dashboard）：一个 agenda 块 + 「本周到期的习惯」+ 按状态分组的 todo
 （Doing/Next/TODO/Waiting/Someday），另有五个单状态命令 ~g~/~n~/~w~/~p~/~s~。两个 skip 函数是它的
 配套：~+agenda-skip-habit~ 把重复任务从普通块里排除；~+agenda-skip-unless-habit-due-this-week~
-反过来只收「今天到本周日」到期的习惯，区间重复（如 ~.+2d/4d~）取最晚那个到期日。两者都靠
-`(save-excursion (outline-next-heading) (point))` 返回跳过终点，这是 ~org-agenda-skip-function~ 的约定。
+反过来只收「今天到本周日」到期的习惯，区间重复（如 =.+2d/4d=）取最晚那个到期日。两者都靠
+~(save-excursion (outline-next-heading) (point))~ 返回跳过终点，这是 ~org-agenda-skip-function~ 的约定。
 
 ~+agenda-show-breadcrumbs~ 挂在 ~org-agenda-finalize~ 上，给每行标题后追加「文件名 ▸ 父标题」
 （分隔符是 ~org-agenda-breadcrumbs-separator " ▸ "~，默认 ~"->"~）。它要手工插文本属性，所以先检查
@@ -6935,7 +6939,7 @@ scheduled/deadline、todo/tags/search 块不缩进；过滤上 ~org-agenda-dim-b
 
 两处键位与一个 hook 之外，设置有两条：~calendar-holidays holiday-oriental-holidays~ 用中国节假日表
 （配 ~calendar-chinese-all-holidays-flag t~ 把农历节日全部列出），~calendar-mark-diary-entries-flag
-t~ 在日历上标出 diary 里的条目。diary 之所以能显示 Org 内容，是因为 =diary-file= 里有一行
+t~ 在日历上标出 diary 里的条目。diary 之所以能显示 Org 内容，是因为 ~diary-file~ 里有一行
 ~%%(org-diary)~——代码注释写明这一点，好处是保留 Org 自己的调度与重复语义，而不是把条目导出成
 diary 格式。
 
@@ -6960,8 +6964,8 @@ diary 格式。
 calfw 的 readme 说它是 Emacs 里的日历框架：把各种来源的日程画在 buffer 里，自带 month、1week、
 2week、day 四种视图；~calfw-org~、~calfw-ical~ 是往这个框架里塞数据的两个源。
 
-三个包都来自 ~haji-ali/emacs-calfw~（同一个仓库的 fork），所以 recipe 用 ~:files~ 精确到
-~calfw.el~ / ~calfw-org.el~ / ~calfw-ical.el~。~+agenda-calendar~ 把在 agenda 里选中的那一天带进
+三个包都来自 =haji-ali/emacs-calfw=（同一个仓库的 fork），所以 recipe 用 ~:files~ 精确到
+=calfw.el= / =calfw-org.el= / =calfw-ical.el=。~+agenda-calendar~ 把在 agenda 里选中的那一天带进
 calfw（用 ~get-text-property 'day~ 取日期），内容源两个：Org 与订阅的
 ~chinese-days~ 节假日 ics（"中国放假"），键位用 ~calfw-org-schedule-map~。~:config~ 里四件事：
 ~calfw-calendar-buffer-name~ 改成 ~*Org Calendar*~（上游是 ~defconst~，~setq~ 照样能改，只是越过了
@@ -7415,7 +7419,7 @@ README：在 Magit 里操作 Git forge 上的 issue、PR 与 topic（README 只�
 such as Github and Gitlab, from the comfort of Magit」，细节都在手册里）。
 
 它依赖 ghub 取 token，所以上一节那条 advice 就是它能用 GitHub 的原因。~:init~ 里把
-~forge-post-fallback-directory~ 指到 no-littering 的 ~var/~ 下并立刻 ~make-directory~——草稿目录要
+~forge-post-fallback-directory~ 指到 no-littering 的 =var/= 下并立刻 ~make-directory~——草稿目录要
 在第一次用它之前就存在；这个变量是「远端没有 draft 功能时的落点」。一个 ~custom-face~ 让 topic
 label 用 variable-pitch 且小一号，是纯显示层。
 
@@ -7615,8 +7619,8 @@ diff 即使开了 hunk refining 也很难读，这个包只显示改动的词和
 
 *** The =init-emacs-tools.el= section for ~emureader~
 
-README.org：面向 GNU Emacs 的全能文档阅读器，支持多种主要文档格式，自称要做 =doc-view=、=nov.el=、
-=pdf-tools= 的替代（drop-in replacement）；原名 The Emacs Reader，包名与动态模块名都改过
+README.org：面向 GNU Emacs 的全能文档阅读器，支持多种主要文档格式，自称要做 ~doc-view~、=nov.el=、
+~pdf-tools~ 的替代（drop-in replacement）；原名 The Emacs Reader，包名与动态模块名都改过
 （~reader~ → ~emureader~，~render-core~ → ~emureader-dyn~）。
 
 它是 C 扩展包，所以 recipe 比别的包长，而且 recipe 本身就是这个包在本机的安装说明：
@@ -7708,7 +7712,7 @@ djcb/mu——这就是本模块不出现 ~:straight~ 的原因。
 收件人匹配。再一个是显示层的 ~+mu4e-split-view-sensibly~，按 ~split-width-threshold~ 在左右/上下之间
 选（竖向时标题在左）。
 
-设置本身有两处值得单独看。文件夹名必须写死成 IMAP 上的真名（Gmail 的 ~[Gmail]/Sent Mail~ 即使 web
+设置本身有两处值得单独看。文件夹名必须写死成 IMAP 上的真名（Gmail 的 =[Gmail]/Sent Mail= 即使 web
 UI 是中文也不变），因为 mu4e 是按路径同步的；~mu4e-context-policy 'pick-first~ 决定读信时优先命中
 哪个 context，~mu4e-compose-context-policy 'ask~ 决定写信时要不要问。另外整段 headers 的 thread 前缀
 与各类 mark 被换成 unicode/emoji，~*mu4e-update*~ 被钉在下方 10% 高度的窗口里，不抢正文。
@@ -7832,10 +7836,10 @@ Emacs default."
 
 *** The =init-emacs-mail.el= section for ~+mu4e-lisp-dir~
 
-这两块解决的是同一件事：~mu4e.el~ 在哪。它沿着 ~executable-find "mu"~ 的符号链接往上爬，找
-~share/emacs/site-lisp/mu4e~——nix-darwin 的用户 profile 只 link 了 ~bin/mu~ 而没 link
-~share/emacs~，但它指向的 home-manager 目标里两者都有，所以要顺着 symlink 走一层。
-~+mu4e--prefix~ 只是从 ~.../bin/mu~ 取两级目录。
+这两块解决的是同一件事：=mu4e.el= 在哪。它沿着 ~executable-find "mu"~ 的符号链接往上爬，找
+=share/emacs/site-lisp/mu4e=——nix-darwin 的用户 profile 只 link 了 =bin/mu= 而没 link
+=share/emacs=，但它指向的 home-manager 目标里两者都有，所以要顺着 symlink 走一层。
+~+mu4e--prefix~ 只是从 =.../bin/mu= 取两级目录。
 
 找不到时它返回 ~nil~，~when-let~ 于是不 ~add-to-list~，启动照常往下走——这是本章「找不到就静默跳过」
 那半句的实现。
@@ -7913,11 +7917,11 @@ home-manager path that the symlink points at still has both."
 ~elfeed~ README：可扩展的 web feed 阅读器，支持 Atom、RSS 与 JSON Feed，UI 受 notmuch 启发，
 数据库格式稳定且不打算改。
 
-本配置的 feed 有两类来源：远端 URL，以及 ~var/rss/~ 下的本地 atom（由 =scripts/hn-elfeed.py=、
-=scripts/reddit-elfeed.py= 生成，用 ~file://~ 注册）。本地 atom 意味着「feed 列表里的一项可能还不
-存在」，所以先有这一组构造函数：~+elfeed-local-dir~ 走 no-littering 的 ~var/rss/~，
+本配置的 feed 有两类来源：远端 URL，以及 =var/rss/= 下的本地 atom（由 =scripts/hn-elfeed.py=、
+=scripts/reddit-elfeed.py= 生成，用 =file://= 注册）。本地 atom 意味着「feed 列表里的一项可能还不
+存在」，所以先有这一组构造函数：~+elfeed-local-dir~ 走 no-littering 的 =var/rss/=，
 ~+elfeed-hn-atom~ 与 ~+elfeed-reddit-atom~ 定死文件名，~+elfeed-file-feed~/~+elfeed-hn-feed~ 拼出
-~file://~ 条目，~+elfeed-feed-url~ 统一取 URL——因为列表里既有裸字符串也有 ~(url . tags)~ 对。
+=file://= 条目，~+elfeed-feed-url~ 统一取 URL——因为列表里既有裸字符串也有 ~(url . tags)~ 对。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-web.el
 ;;; -*- lexical-binding: t -*-
@@ -8292,7 +8296,7 @@ nerd-icons 图标。
 
 块首那行 ~;; -*- lexical-binding: t; -*-~ 要留着：它是文件中段的一行文件局部变量声明，Emacs 只认
 文件第一行与第二行的 cookie，所以这一行实际不生效——但它属于代码，删掉就是改代码。
-另外两处按平台分叉：~gnu/linux~ 在 ~telega-before-auth-hook~ 里加一个本地 SOCKS5 代理，~darwin~ 下
+另外两处按平台分叉：=gnu/linux= 在 ~telega-before-auth-hook~ 里加一个本地 SOCKS5 代理，~darwin~ 下
 开 ~telega-alert-mode~。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-web.el
@@ -8674,11 +8678,11 @@ advice 了 ~dired-do-copy~，把 dired 里标记的文件附到可见的 chatbuf
 
 *** The =init-emacs-web.el= section for ~chirp~
 
-README：Emacs 里的 X/Twitter 浏览器，认证与取数全部交给 =twitter-cli=，Chirp 自己只做 buffer：
+README：Emacs 里的 X/Twitter 浏览器，认证与取数全部交给 ~twitter-cli~，Chirp 自己只做 buffer：
 只读视图用 ~special-mode~、图片用 ~image-mode~、撰写 buffer 可编辑。
 
 十一个 ~:commands~ 是它全部的入口，都是延后加载。~:init~ 先做两件事：缓存目录与草稿目录都改到
-no-littering 的 ~var/chirp/~ 下，并 ~make-directory~——首次用之前就得存在。~:config~ 是一串「关掉」：
+no-littering 的 =var/chirp/= 下，并 ~make-directory~——首次用之前就得存在。~:config~ 是一串「关掉」：
 不显头像、不显媒体、不要分隔符，同 ~telega~ 那边「图片会影响启动」是同一个思路。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-web.el
@@ -8742,8 +8746,8 @@ no-littering 的 ~var/chirp/~ 下，并 ~make-directory~——首次用之前就
 
 *** The =init-emacs-web.el= section for ~xwidget~
 
-内置包，没有 README；Commentary 直接指向手册两节——=(emacs)Embedded WebKit Widgets= 讲用户可见的
-功能，=(elisp)Embedded Native Widgets= 讲 API。
+内置包，没有 README；Commentary 直接指向手册两节——~(emacs)Embedded WebKit Widgets~ 讲用户可见的
+功能，~(elisp)Embedded Native Widgets~ 讲 API。
 
 只改 buffer 名格式（~*XWidget: <title>*~）。它是编译期特性：本机这个 Emacs 带 xwidget 支持，
 ~xwidget-webkit-browse-url~ 才存在。
@@ -8775,12 +8779,12 @@ no-littering 的 ~var/chirp/~ 下，并 ~make-directory~——首次用之前就
 里随时可用」。
 
 backend 是三处约束的合成：~gptel-make-openai~ 指向本机 Magpie 网关（~127.0.0.1:3425~，~http~）——
-host 不是 ~api.openai.com~ 所以走 ~/v1/chat/completions~；~:stream t~ 必须显式给，否则不流式；
+host 不是 ~api.openai.com~ 所以走 =/v1/chat/completions=；~:stream t~ 必须显式给，否则不流式；
 ~:models~ 里没列出的模型会被丢掉。用 ~setq-default~ 是因为 ~gptel-backend~ 是 buffer-local。
 模型 id 不在本文件里定：~+gptel-magpie-store~ 是本机 Magpie（一个 WebKit 应用）的
 ~localstorage.sqlite3~ 路径，~+gptel-magpie-model~ 用 ~sqlite3 -readonly … | xxd -r -p |
 iconv -f UTF-16LE~ 把值从 UTF-16LE blob 里解出来，读不到就退回 ~gptel-model~。
-~auto/deepseek-flash~ 不是 picker 的选择，而是 WorkBuddy 自己的 model id（gptel 不跟随 picker）。
+=auto/deepseek-flash= 不是 picker 的选择，而是 WorkBuddy 自己的 model id（gptel 不跟随 picker）。
 两个都定义在 ~:init~ 而不是 ~:config~：下一个包的配置要读它们，而那时 ~gptel~ 可能还没加载。
 
 ~gptel-agent~ README：一组 tools 与 prompts，让 ~gptel~ 以「agent」方式用任意 LLM 自主完成任务——
@@ -9110,11 +9114,11 @@ Protocol），支持 24 个 agent。
 ~:init~ 里那一串 ~setq~ 大多是「关」：不要 context sources、不要 MCP、不要 welcome 消息、不要
 chat-mode、表格不加斑马纹；~agent-shell-agent-configs~ 只留一个构造函数
 ~+agent-shell-pi-make-agent-config~，它包住上游的 pi config，把 ~:default-model-id~ 换成读 Magpie
-picker 的函数（~+agent-shell-pi-model-id~ 会补 ~magpie/~ 前缀，因为 Pi 把第一个斜杠之前当 provider）。
+picker 的函数（~+agent-shell-pi-model-id~ 会补 =magpie/= 前缀，因为 Pi 把第一个斜杠之前当 provider）。
 
-三处覆盖值得单独记：~+agent-shell-dot-subdir~ 把会话数据收敛到 ~var/agent-shell/~ 下，目录名由
+三处覆盖值得单独记：~+agent-shell-dot-subdir~ 把会话数据收敛到 =var/agent-shell/= 下，目录名由
 项目目录名与 ~cwd~ 的 sha1 前 10 位拼成；~+agent-shell-resume-codex-fork~ 在 codex 的
-~session/fork~ 之后补一次 ~session/resume~（不补的话事件订阅丢了、历史会被重放），它挂在
+=session/fork= 之后补一次 =session/resume=（不补的话事件订阅丢了、历史会被重放），它挂在
 ~agent-shell--send-request~ 上、深度 -50，好让 ~agent-shell-btw~ 的 advice 先看到 fork id；
 ~agent-shell--update-bootstrapping-fragment~ 被 ~:override~ 成 ~ignore~（不要那段引导文字）。
 header 里另加了可点的选项：~+agent-shell-extend-header-model~ 把 ~collaboration_mode~ 与
@@ -9272,7 +9276,7 @@ Pi treats the text before the first slash as the provider, so
 
 五个都是同一批邻仓包，共同点是都不改 ~agent-shell~ 核心，只往里挂 hook、键位或 advice。
 ~agent-shell-fork-tree~ README：浏览相关会话，包括装这个包之前就创建过的 fork；用通用的 ACP
-~session/list~、~session/load~ 与原生 ~session/fork~，不读 provider 数据库或私有 parent 元数据。
+=session/list=、=session/load= 与原生 =session/fork=，不读 provider 数据库或私有 parent 元数据。
 ~agent-shell-btw~ README（中文）：在侧栏里开临时 fork，创建时继承主会话上下文，之后可以连续对话、
 执行工具；关闭时 hook 自动取消任务并删除临时会话记录。~agent-shell-links~ README：存指向会话的稳定
 指针（session id + agent 标识 + 工作目录），打开时优先复用活着的 buffer，否则恢复会话——它本身只定义
@@ -9282,7 +9286,7 @@ TRAMP buffer 里跑，transcript 存在本地。~agent-shell-attention~ README�
 
 各自的接线就一句话：fork-tree 关掉自动 rebuild、在三处键位图里绑 ~C-c g t~；btw 到处绑 ~C-c b~；
 links 调 ~agent-shell-links-bookmark-setup~ 并在 ~ol~ 加载后注册 ~agent-shell:~ 链接类型；tramp 把
-transcript 目录改到 ~var/agent-shell/remote-transcripts/~ 后开 mode；attention 等到第一次进入
+transcript 目录改到 =var/agent-shell/remote-transcripts/= 后开 mode；attention 等到第一次进入
 ~agent-shell-mode~ 才启 global mode，并明确不要零计数、不发系统通知。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-ai.el
@@ -9367,10 +9371,10 @@ README：~agent-shell~ 会自动把完整对话 transcript 存成 Markdown 或 O
 =.agent-shell/transcripts/= 下，或另指定目录），久了就是一座知识库却没法搜；~agent-recall~ 给它们建
 持久索引、做全文检索，并能从任一 transcript 恢复过去的会话。
 
-~:init~ 那一组设置定的是检索范围与排序：四个搜索根（本配置仓库、=~/src=、~/.config~、
-~var/agent-shell~）、深度 3、用 ~consult-ripgrep~ 搜、按修改时间倒序、恢复时接着同一份 transcript；
+~:init~ 那一组设置定的是检索范围与排序：四个搜索根（本配置仓库、==/src=、=/.config~、
+=var/agent-shell=）、深度 3、用 ~consult-ripgrep~ 搜、按修改时间倒序、恢复时接着同一份 transcript；
 ~agent-shell-mode~ hook 上挂 ~agent-recall-track-sessions~ 记 session id。
-~agent-recall-consult~ 是同一个仓库里的 consult 前端，这里只绑 ~C-c g /~ 并把
+~agent-recall-consult~ 是同一个仓库里的 consult 前端，这里只绑 =C-c g /= 并把
 ~agent-recall-consult-resumable-only~ 设成 ~nil~——搜索结果里也保留不能恢复的条目，方便只读查历史。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-ai.el
@@ -9471,72 +9475,72 @@ OpenAI OAuth（~gptel-openai-oauth~），与本章主用的 Magpie 网关是两�
 
 * The custom libraries of this configuration
 
-除了 `core/init-emacs-*.el` 这些配置模块，本配置里还有一层「自己的库」：宏与函数。它们不是
+除了 =core/init-emacs-*.el= 这些配置模块，本配置里还有一层「自己的库」：宏与函数。它们不是
 第三方包，也不打算发布，但被多个模块共用，改动的影响面比单个模块大。
 
 ** ~add-hook!~ 与 ~defadvice!~
 
-两个宏定义在 `init-emacs-util`，是全文的基础设施：
+两个宏定义在 ~init-emacs-util~，是全文的基础设施：
 
-- `add-hook!` 一次给多个 hook 装一批函数，支持 `:local`、`:append`、`:depth`、`:remove`、
-  `:call-immediately`、`:unless-daemonp-call-immediately` 等关键字。后者用于「非 daemon 启动时
+- ~add-hook!~ 一次给多个 hook 装一批函数，支持 ~:local~、~:append~、~:depth~、~:remove~、
+  ~:call-immediately~、~:unless-daemonp-call-immediately~ 等关键字。后者用于「非 daemon 启动时
   立即执行一次」的场景（例如加载主题），daemon 下则推迟到有 frame 时。
-- `defadvice!` 把 `advice-add` 写成声明式，形式和 `use-package` 的 `:config` 接近，避免在模块里
-  散落 `advice-add` / `advice-remove` 的成对调用。
+- ~defadvice!~ 把 ~advice-add~ 写成声明式，形式和 ~use-package~ 的 ~:config~ 接近，避免在模块里
+  散落 ~advice-add~ / ~advice-remove~ 的成对调用。
 
 ** 以 ~+~ 为前缀的函数
 
-配置私有的函数一律以 `+` 开头（`+load-theme`、`+elfeed-display-entry`、`+mu4e-apply`、
-`+agent-shell-dot-subdir` 等），与上游包的命名区分。它们分散在各自模块里，不集中到一个文件——
+配置私有的函数一律以 ~+~ 开头（~+load-theme~、~+elfeed-display-entry~、~+mu4e-apply~、
+~+agent-shell-dot-subdir~ 等），与上游包的命名区分。它们分散在各自模块里，不集中到一个文件——
 函数跟着使用它的模块走，读代码时不必在两个文件之间跳。
 
-`init-emacs-util` 里还有几个被多处调用的 helper（`+unfill-region`、
-`+enable-conservative-scrolling`），命名同样是 `+` 前缀。
+~init-emacs-util~ 里还有几个被多处调用的 helper（~+unfill-region~、
+~+enable-conservative-scrolling~），命名同样是 ~+~ 前缀。
 
 ** 模块内的小宏
 
-有些模块在本地定义小宏（例如 `init-emacs-completion` 里的
-`+corfu-move-to-minibuffer`、`init-emacs-web` 里的 `+elfeed-*`）。原则是：只被一个模块用的，
-就留在那个模块；被两个以上模块用的，才提到 `init-emacs-util`。
+有些模块在本地定义小宏（例如 ~init-emacs-completion~ 里的
+~+corfu-move-to-minibuffer~、~init-emacs-web~ 里的 ~+elfeed-*~）。原则是：只被一个模块用的，
+就留在那个模块；被两个以上模块用的，才提到 ~init-emacs-util~。
 
 * Frequently Asked Questions (FAQ)
 
 ** 为什么很多模块，而不是一个 init.el？
 
 一个模块对应一类关注点（主题、补全、Org、邮件……），改一个领域只读一个文件。更重要的是加载顺序：
-顺序依赖集中写在 `init.el` 的 `require` 列表里，而不是散落在各文件内部。代价是文件多，收益是
+顺序依赖集中写在 =init.el= 的 ~require~ 列表里，而不是散落在各文件内部。代价是文件多，收益是
 「谁在什么时候加载」这件事始终只有一个答案。
 
 ** 为什么每个包都显式写 ~:straight~？
 
-`straight-use-package-by-default` 设为 `nil`。如果默认接管，任何一个 `use-package` 都会去装包，
+~straight-use-package-by-default~ 设为 ~nil~。如果默认接管，任何一个 ~use-package~ 都会去装包，
 读代码时无法区分「这个包由 straight 管理」和「这个包是内置的」。显式写出来，代价是多打几个字。
 
 ** 加一个新包要改几处？
 
-只有一处：在对应模块里加一个 `use-package`（带 `:straight`），然后 `C-c C-v C-t` 重新 tangle。
-不需要改 `init.el`，也不需要手动装包——straight 在下次启动时按 `:straight` 声明安装。
+只有一处：在对应模块里加一个 ~use-package~（带 ~:straight~），然后 ~C-c C-v C-t~ 重新 tangle。
+不需要改 =init.el=，也不需要手动装包——straight 在下次启动时按 ~:straight~ 声明安装。
 
 ** 为什么主题在 ~init-emacs-theme~，而不在 ~init-emacs-ui~？
 
-因为平台层（`init-emacs-platform`）在加载时就会触发外观变化回调，它需要一个已经定义好的
-`+load-theme`；而 `init-emacs-theme` 排在平台层之前。把主题相关的东西放进 ui 会让这条依赖边
+因为平台层（~init-emacs-platform~）在加载时就会触发外观变化回调，它需要一个已经定义好的
+~+load-theme~；而 ~init-emacs-theme~ 排在平台层之前。把主题相关的东西放进 ui 会让这条依赖边
 反过来。
 
 ** 改了配置但没生效怎么办？
 
-先确认改的是 `emacs-config.org`，然后 `C-c C-v C-t` 重新 tangle，再重启 Emacs。只在运行中的
-Emacs 里 `eval-buffer` 往往不够：`custom-set-faces`、`defcustom` 这类「设置」不会因为删掉配置
+先确认改的是 =emacs-config.org=，然后 ~C-c C-v C-t~ 重新 tangle，再重启 Emacs。只在运行中的
+Emacs 里 ~eval-buffer~ 往往不够：~custom-set-faces~、~defcustom~ 这类「设置」不会因为删掉配置
 而撤销，需要重启或显式重置。
 
-** 为什么文档改动也会让 ~core/~ 出现 diff？
+** 为什么文档改动也会让 =core/= 出现 diff？
 
-不会。散文不参与 tangle；如果只改散文却看到 `core/` 有 diff，说明误动了 `#+begin_src` 块。
-正常情况应当满足 `git diff core/` 为空。
+不会。散文不参与 tangle；如果只改散文却看到 =core/= 有 diff，说明误动了 ~#+begin_src~ 块。
+正常情况应当满足 =git diff core/= 为空。
 
 ** 怎么排查启动变慢？
 
-`init.el` 开头挂了一个 `window-setup-hook`，启动后会在 echo area 打印 window-setup 与 after-init
-的耗时。要更细的分解，用 `emacs --init-directory ... -Q --batch` 之外的 `use-package` 计时，
-或临时打开 `init-file-debug` 看 `early-init.el` 里被抑制的那些告警。
+=init.el= 开头挂了一个 ~window-setup-hook~，启动后会在 echo area 打印 window-setup 与 after-init
+的耗时。要更细的分解，用 ~emacs --init-directory ... -Q --batch~ 之外的 ~use-package~ 计时，
+或临时打开 ~init-file-debug~ 看 =early-init.el= 里被抑制的那些告警。
 
