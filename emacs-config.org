@@ -7079,6 +7079,16 @@ tree-sitter 支持的构建静默跳过这一段。
 生效的 ts 路径只有 ~rust-mode~ 的派生开关（见上文）。要让它真的生效，把它改成 ~setopt~ 即可——
 这是设置方式问题，不是变量语义问题。
 
+**2026-11-21 已修**：上面那句实测描述的问题已按它自己的建议改掉——setq 换成 setopt。
+但实测又发现还有一层：只换 setopt 仍然不够，~major-mode-remap-alist~ 依旧为空。根因在
+~early-init.el~ 里那条“启动期不让 setopt 自动加载依赖”的 ~setopt--set~ advice：
+setopt 执行时 ~treesit.el~ 还没加载，defcustom 的 ~:set~ 函数拿不到，于是退化成普通赋值
+（症状与 setq 完全相同）。修复是在 setopt 之前显式 ~require 'treesit~——advice 只挡
+“自动”加载，不挡显式 require。现在的行为：重启后 ~major-mode-remap-alist~ 有 26 条
+（c/python/js 等全部映射到 ts 版本），~treesit-auto-install-grammar 'always~ 不变，首次打开
+某种语言时缺 grammar 会联网装到 ~var/treesit/~。验证断言进了 ~scripts/test-init-treesit.sh~：
+batch 加载后 ~major-mode-remap-alist~ 必须非空，且配置里不得回退成 ~setq~。
+
 + 包名（Emacs 内置）：~treesit~
 + Git 仓库：
   - GitHub：<https://github.com/emacs-mirror/emacs>（源码随 Emacs 自带）
@@ -7088,8 +7098,16 @@ tree-sitter 支持的构建静默跳过这一段。
 (use-package treesit
   :when (treesit-available-p)
   :init
-  (setq treesit-enabled-modes t
-        treesit-auto-install-grammar 'always))
+  ;; Load the library explicitly: the `treesit-enabled-modes' setter lives in
+  ;; treesit.el, and early-init's setopt advice suppresses auto-loading for
+  ;; type checks during startup.  Without this require, `setopt' degrades to
+  ;; a plain set and `major-mode-remap-alist' stays empty.
+  (require 'treesit)
+  ;; NOTE: `setopt' is load-bearing here: the `treesit-enabled-modes'
+  ;; defcustom installs the mode remappings via its :set function;
+  ;; `setq' bypasses that and leaves `major-mode-remap-alist' empty.
+  (setopt treesit-enabled-modes t
+          treesit-auto-install-grammar 'always))
 #+end_src
 
 *** The =init-emacs-langs.el= section to provide the feature

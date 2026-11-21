@@ -126,7 +126,15 @@
 (use-package treesit
   :when (treesit-available-p)
   :init
-  (setq treesit-enabled-modes t
-        treesit-auto-install-grammar 'always))
+  ;; Load the library explicitly: the `treesit-enabled-modes' setter lives in
+  ;; treesit.el, and early-init's setopt advice suppresses auto-loading for
+  ;; type checks during startup.  Without this require, `setopt' degrades to
+  ;; a plain set and `major-mode-remap-alist' stays empty.
+  (require 'treesit)
+  ;; NOTE: `setopt' is load-bearing here: the `treesit-enabled-modes'
+  ;; defcustom installs the mode remappings via its :set function;
+  ;; `setq' bypasses that and leaves `major-mode-remap-alist' empty.
+  (setopt treesit-enabled-modes t
+          treesit-auto-install-grammar 'always))
 
 (provide 'init-emacs-langs)
