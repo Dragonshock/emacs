@@ -392,6 +392,49 @@ t，之后恢复并 ~redraw-frame~（daemon 下跳过）——这一段专治深
 
 改标题顺序就是改加载顺序。要重排时先确认自己动到的是不是上面这几条约束边。
 
+** The module map
+
+23 个模块按「关注什么」分成五组。分组只影响阅读顺序，不影响加载顺序——加载顺序永远是
+~init.el~ 里那个列表。建议路线：底座 → 外观 → 交互 → 语言与文档 → 外部世界。
+
+*** Foundation
+
+- ~init-emacs-util~ —— 宏地板：~add-hook!~ 与 ~defadvice!~，后面每一节都在用。
+- ~init-emacs-straight~ —— 包管理器引导与 ~use-package~ 集成。
+- ~init-emacs-core~ —— 没有专属模块的内置行为的收容所，也是全文最长的一节。
+
+*** Appearance
+
+- ~init-emacs-theme~ —— 主题选择与明暗跟随，平台层与主题层之间的唯一接口。
+- ~init-emacs-ui~ —— 窗口装饰、行号、边框等视觉细节。
+- ~init-emacs-platform~ —— macOS 特化：外观变化、修饰键、外部应用联动。
+- ~init-emacs-highlight~ —— 高亮类小包的取舍（被注释掉的那些是否决，不是待办）。
+- ~init-emacs-modeline~ —— 模式行。
+
+*** Interaction
+
+- ~init-emacs-completion~ —— 补全栈：~vertico~ / ~consult~ / ~embark~ / ~corfu~ 一族。
+- ~init-emacs-search~ —— 搜索与替换的入口（~consult~ 之外的那些）。
+- ~init-emacs-edit~ —— 编辑行为与 ~C-c r~ 前缀键的归属。
+- ~init-emacs-window~ —— 窗口管理与 popper 规则表。
+- ~init-emacs-dired~ —— 文件管理。
+
+*** Languages and writing
+
+- ~init-emacs-prog~ —— 编程通用层：Eglot、语法检查、跳转、~C-c r r~ 等。
+- ~init-emacs-langs~ —— 各语言的专属配置。
+- ~init-emacs-writing~ —— 纯文本与写作。
+- ~init-emacs-org~ —— Org 本体与导出/预览。
+- ~init-emacs-agenda~ —— 议程、捕获、refile，建立在 ~init-emacs-org~ 定下的目录结构上。
+
+*** The outside world
+
+- ~init-emacs-vcs~ —— Git 与版本控制前端。
+- ~init-emacs-tools~ —— 零散工具与系统集成。
+- ~init-emacs-mail~ —— 邮件。
+- ~init-emacs-web~ —— RSS、浏览器、即时通讯等网络入口。
+- ~init-emacs-ai~ —— LLM 相关的两条栈（~gptel~ 与 ~agent-shell~）。
+
 #+begin_src emacs-lisp :tangle init.el
 ;;; -*- lexical-binding: t -*-
 
@@ -441,49 +484,6 @@ t，之后恢复并 ~redraw-frame~（daemon 下跳过）——这一段专治深
 自己的 ~#+begin_src~ 块（绝大多数节恰好一块；一节里放了几个相邻的顶层 form 时，就是几块）。
 同一个模块的所有块 tangle 到同一个文件。
 模块之间几乎不互相 ~require~，所以顺序只在这一层有意义。
-
-** The module map
-
-23 个模块按「关注什么」分成五组。分组只影响阅读顺序，不影响加载顺序——加载顺序永远是
-~init.el~ 里那个列表。建议路线：底座 → 外观 → 交互 → 语言与文档 → 外部世界。
-
-*** Foundation
-
-- ~init-emacs-util~ —— 宏地板：~add-hook!~ 与 ~defadvice!~，后面每一节都在用。
-- ~init-emacs-straight~ —— 包管理器引导与 ~use-package~ 集成。
-- ~init-emacs-core~ —— 没有专属模块的内置行为的收容所，也是全文最长的一节。
-
-*** Appearance
-
-- ~init-emacs-theme~ —— 主题选择与明暗跟随，平台层与主题层之间的唯一接口。
-- ~init-emacs-ui~ —— 窗口装饰、行号、边框等视觉细节。
-- ~init-emacs-platform~ —— macOS 特化：外观变化、修饰键、外部应用联动。
-- ~init-emacs-highlight~ —— 高亮类小包的取舍（被注释掉的那些是否决，不是待办）。
-- ~init-emacs-modeline~ —— 模式行。
-
-*** Interaction
-
-- ~init-emacs-completion~ —— 补全栈：~vertico~ / ~consult~ / ~embark~ / ~corfu~ 一族。
-- ~init-emacs-search~ —— 搜索与替换的入口（~consult~ 之外的那些）。
-- ~init-emacs-edit~ —— 编辑行为与 ~C-c r~ 前缀键的归属。
-- ~init-emacs-window~ —— 窗口管理与 popper 规则表。
-- ~init-emacs-dired~ —— 文件管理。
-
-*** Languages and writing
-
-- ~init-emacs-prog~ —— 编程通用层：Eglot、语法检查、跳转、~C-c r r~ 等。
-- ~init-emacs-langs~ —— 各语言的专属配置。
-- ~init-emacs-writing~ —— 纯文本与写作。
-- ~init-emacs-org~ —— Org 本体与导出/预览。
-- ~init-emacs-agenda~ —— 议程、捕获、refile，建立在 ~init-emacs-org~ 定下的目录结构上。
-
-*** The outside world
-
-- ~init-emacs-vcs~ —— Git 与版本控制前端。
-- ~init-emacs-tools~ —— 零散工具与系统集成。
-- ~init-emacs-mail~ —— 邮件。
-- ~init-emacs-web~ —— RSS、浏览器、即时通讯等网络入口。
-- ~init-emacs-ai~ —— LLM 相关的两条栈（~gptel~ 与 ~agent-shell~）。
 
 ** The =init-emacs-util.el= module
 
