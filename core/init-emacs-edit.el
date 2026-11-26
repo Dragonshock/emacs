@@ -51,6 +51,7 @@
   (define-minor-mode +auto-revert-mode
     "A lazy alternative to `global-auto-revert-mode'."
     :global t
+    :group 'editing
     (when global-auto-revert-mode
       (setq +auto-revert-mode nil))
     (let ((fn (if +auto-revert-mode #'add-hook #'remove-hook)))

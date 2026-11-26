@@ -89,11 +89,20 @@
 
   ;; Exterminate Magit buffers
   (defun +magit-kill-buffers (&rest _)
-    "Restore window configuration and kill all Magit buffers."
+    "Restore window configuration and kill all Magit buffers.
+The major-mode check has to run before restoring the window
+configuration: the restore switches to the previous buffer, so
+checking afterwards would test the wrong buffer and never kill."
     (interactive)
-    (magit-restore-window-configuration)
-    (let ((buffers (magit-mode-get-buffers)))
-      (when (eq major-mode 'magit-status-mode)
+    (let ((status-p (eq major-mode 'magit-status-mode))
+          buffers)
+      ;; `magit-mode-get-buffers' filters by the current buffer's
+      ;; `magit-toplevel', so collect the list before the restore
+      ;; switches buffers, for the same reason as the mode check.
+      (when status-p
+        (setq buffers (magit-mode-get-buffers)))
+      (magit-restore-window-configuration)
+      (when status-p
         (mapc (lambda (buf)
                 (with-current-buffer buf
                   (if (and magit-this-process

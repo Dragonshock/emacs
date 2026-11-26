@@ -216,15 +216,4 @@
 (setq frame-title-format
       '((:eval (or buffer-file-truename "%b"))))
 
-;; [Kitty Graphics Protocol] Implements support for Kitty's "graphics protocol",
-;; which allows the terminal to display images and videos inline.
-;; Enabled (only) by `+tty-setup-features' in init-emacs-core: kitty TERM yes,
-;; ghostty TERM no (protocol subset + video redraw storms, research H1).
-(use-package kitty-graphics
-  :straight (:type git :host github :repo "cashmeredev/kitty-graphics.el")
-  ;; Video streaming stays on for kitty; the ghostty branch never calls
-  ;; kitty-graphics-setup, so video (and all graphics) never start there.
-  :init
-  (setq kitty-graphics-enable-video t))
-
 (provide 'init-emacs-ui)

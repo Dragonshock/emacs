@@ -164,7 +164,7 @@ home-manager path that the symlink points at still has both."
                             (expand-file-name link (file-name-directory path))))))))
     dir))
 
-(when-let ((dir (+mu4e-lisp-dir)))
+(when-let* ((dir (+mu4e-lisp-dir)))
   (add-to-list 'load-path dir))
 
 (cond

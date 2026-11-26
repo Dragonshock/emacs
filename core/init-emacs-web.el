@@ -12,7 +12,8 @@
   "Path of the private r/emacs Atom file produced by scripts/reddit-elfeed.py.")
 
 (defun +elfeed-file-feed (filename &rest tags)
-  "Build an Elfeed feed entry for local FILENAME under `+elfeed-local-dir' with TAGS."
+  "Build an Elfeed feed entry for local FILENAME under
+`+elfeed-local-dir' with TAGS."
   (cons (concat "file://" (expand-file-name filename +elfeed-local-dir)) tags))
 
 (defun +elfeed-hn-feed (&rest tags)
@@ -124,13 +125,21 @@ Shell gate remains ELFEED_HN_LLM (see scripts/update-elfeed-feeds).")
   ;; FN argument is a wrapper object, not eq to #'elfeed-update.
   (defun +elfeed--update-after-local-feeds (fn args run-hn)
     "Refresh local feeds asynchronously, then apply FN to ARGS.
-When RUN-HN is non-nil (or `+elfeed-hn-llm'), export ELFEED_HN_LLM=1."
-    (if (process-live-p (get-process "elfeed-local-feeds"))
-        (progn
-          (message "Local feed update is already running; updating remote feeds only")
-          (apply fn args))
+When RUN-HN is non-nil (or `+elfeed-hn-llm'), export ELFEED_HN_LLM=1.
+Without scripts/update-elfeed-feeds on disk (it is not tracked in
+this repo), fall straight through to the remote feed update instead
+of spawning a process that can only fail."
+    (let ((command (expand-file-name "scripts/update-elfeed-feeds"
+                                     user-emacs-directory)))
+      (cond
+       ((process-live-p (get-process "elfeed-local-feeds"))
+        (message "Local feed update is already running; updating remote feeds only")
+        (apply fn args))
+       ((not (file-executable-p command))
+        (message "Elfeed: %s is missing; updating remote feeds only" command)
+        (apply fn args))
+       (t
       (let ((process-environment (copy-sequence process-environment))
-            (command (expand-file-name "scripts/update-elfeed-feeds" user-emacs-directory))
             (token (condition-case err
                        (auth-source-pick-first-password :host "reddit-private-rss"
                                                         :port "rss")
@@ -153,7 +162,7 @@ When RUN-HN is non-nil (or `+elfeed-hn-llm'), export ELFEED_HN_LLM=1."
                             (message "Local feed update failed; see *elfeed-local-feeds*"))
                           ;; Atom may have appeared after a successful Reddit fetch.
                           (+elfeed-ensure-reddit-feed)
-                          (apply fn args)))))))
+                          (apply fn args)))))))))
 
   (defadvice! +elfeed-update-after-local-feeds-a (fn &rest args)
     :around #'elfeed-update
@@ -341,16 +350,6 @@ When RUN-HN is non-nil (or `+elfeed-hn-llm'), export ELFEED_HN_LLM=1."
       (telega-filters-push filter)
       (message "telega filter: %s" (if archive-p telega-filter-default 'archive))))
 
-  (defun +telega-reaction-emoji (emoji)
-    "Return EMOJI, using the emoji presentation for a plain heart."
-    (if (equal emoji "❤") "❤️" emoji))
-
-  (defun +telega-reaction-title (title)
-    "Use the emoji presentation when TITLE starts with a plain heart."
-    (if (and (stringp title) (string-prefix-p "❤" title))
-        (concat "❤️" (substring title 1))
-      title))
-
   (defun +telega-alert--strip-text-properties (args)
     "Strip text properties from the notification spec in ARGS.
 `alert' embeds the title and body in a notifier string, where Emacs
@@ -447,13 +446,15 @@ text properties are invalid."
   (setq telega-root-fill-column 70
         telega-chat-fill-column 90)
 
+  ;; 固定 70/90：关掉上游按窗口宽重算 fill-column 的 auto-fill minor mode，
+  ;; 否则 `telega-chat-fill-column' 会被 window-width - margin 覆盖。
+  (telega-root-auto-fill-mode -1)
+  (remove-hook 'telega-chat-mode-hook #'telega-chat-auto-fill-mode)
+
   (add-hook! telega-chat-mode-hook
     (defun +telega-disable-visual-fill-column-h ()
       "Disable visual fill column in Telega chat buffers."
       (visual-fill-column-mode -1)))
-
-  (telega-root-auto-fill-mode -1)
-  (remove-hook 'telega-chat-mode-hook #'telega-chat-auto-fill-mode)
 
   (setq telega-chat-show-avatars nil
         telega-user-show-avatars nil
@@ -525,11 +526,13 @@ text properties are invalid."
                           (apply-partially #'+telega-capf-in-input capf))
                         telega-completions-capf-functions)))
 
-  (when (eq system-type 'gnu/linux)
-    (add-hook! telega-before-auth-hook
-      (defun +telega-enable-linux-proxy-h ()
-        "Add and enable the local SOCKS5 proxy before Telega authorizes."
-        (telega--addProxy '(:server "127.0.0.1" :port 7891 :type (:@type "proxyTypeSocks5"))
+  (add-hook! telega-before-auth-hook
+    (defun +telega-enable-local-proxy-h ()
+      "Add and enable the local SOCKS5 proxy before Telega authorizes."
+      (let ((port (pcase system-type
+                    ('gnu/linux 7891)   ; clash
+                    ('darwin 6153))))   ; surge socks5
+        (telega--addProxy `(:server "127.0.0.1" :port ,port :type (:@type "proxyTypeSocks5"))
           :enable-p t
           :comment "Local SOCKS5 proxy"))))
 
@@ -587,6 +590,17 @@ text properties are invalid."
     :override #'telega-chatbuf-footer-ins-sponsored-messages
     nil)
 
+  ;; HACK: TUI 无图像能力时不要进 `image-mode`
+  ;; `image-mode' 在 `display-images-p' 为 nil 时直接报
+  ;; "Display does not support images"；非图形显示改走外部查看器，
+  ;; 覆盖 `telega-photo--open'、`telega-image-view-msg' 等全部调用方。
+  ;; 上游：#300、#491（TTY 无图像支持时的占位符/报错）。
+  (defadvice! +telega-image-view-file-tty-a (orig tl-file &optional for-msg)
+    :around #'telega-image-view-file
+    (if (display-images-p)
+        (funcall orig tl-file for-msg)
+      (telega-open-file (telega-file--path tl-file) for-msg)))
+
   (add-hook! telega-ready-hook
     (defun +telega-disable-sponsored-messages-h ()
       (telega--toggleHasSponsoredMessagesEnabled nil)))
@@ -611,10 +625,21 @@ text properties are invalid."
   ;; Lucius-style chat chrome.  His Matrix bridge, notification keyword
   ;; filter, and nerd-icons symbols are not copied: the bridge data is
   ;; personal, and nerd-icons is not part of this telega install.
+  ;; TUI 下 `org-open-file' 对普通图片会回落到 Emacs 内的 `find-file'，
+  ;; 再进 `image-mode' 同样报错；非图形显示直接交给系统查看器。
+  (defun +telega-open-file (file)
+    "Open FILE; on a TTY hand it to the OS viewer."
+    (if (display-graphic-p)
+        (org-open-file file)
+      (pcase system-type
+        ('darwin (call-process "open" nil 0 nil file))
+        ('gnu/linux (call-process "xdg-open" nil 0 nil file))
+        (_ (find-file file)))))
   (keymap-global-set "C-c t" telega-prefix-map)
-  (setq telega-autoplay-mode t
-        telega-notifications-mode t
-        telega-open-file-function #'org-open-file
+  ;; `telega-autoplay-mode'/`telega-notifications-mode' 是 global minor
+  ;; mode：只 `setq' 变量不会安装 hook（上游 telega-modes.el /
+  ;; telega-notifications.el），TUI 下也不需要，故不再设置。
+  (setq telega-open-file-function #'+telega-open-file
         telega-sticker-size '(6 . 24)
         telega-symbol-mark (propertize " " 'face 'telega-button-highlight)
         telega-msg-save-dir "~/Downloads"
@@ -646,13 +671,6 @@ text properties are invalid."
   (add-hook 'enable-theme-functions #'+telega-redraw-for-theme)
   (add-hook 'telega-msg-ignore-predicates
             (telega-match-gen-predicate 'msg '(sender is-blocked)))
-  (advice-add 'telega-ins--msg-reaction-type :around
-              (lambda (fn rt)
-                (if (eq (intern (plist-get rt :@type)) 'reactionTypeEmoji)
-                    (telega-ins (+telega-reaction-emoji (plist-get rt :emoji)))
-                  (funcall fn rt))))
-  (advice-add 'telega-msg-reaction-title-for-completion :filter-return
-              #'+telega-reaction-title)
   (require 'telega-mnz)
   (global-telega-mnz-mode 1)
   (when (eq system-type 'darwin)

@@ -286,7 +286,16 @@
 
 ;; [glyphless-display] Don't render glyphs, in case of undisplayable characters.
 (use-package glyphless-mode
-  :hook (after-init . glyphless-display-mode))
+  :hook (after-init . glyphless-display-mode)
+  :config
+  ;; Upstream draws format-control and variation-selector characters as a
+  ;; thin space, and the glyphless-char face underlines it.  In a TTY those
+  ;; underlined cells look like a line through the text and shift columns;
+  ;; both groups are zero-width characters, so draw nothing instead.
+  (setq glyphless-char-display-control
+        '((format-control . zero-width)
+          (variation-selectors . zero-width)
+          (no-font . hex-code))))
 
 ;; [Scrolling]
 (setq
@@ -376,7 +385,13 @@
           "JAVA_HOME" "JAVA21_HOME" "JAVA26_HOME" "JDTLS_JAVA_HOME"))
   ;; External programs can be needed by mode hooks during startup, so import
   ;; the login-shell environment before the rest of the configuration loads.
-  (exec-path-from-shell-initialize))
+  (exec-path-from-shell-initialize)
+  ;; etaf-md's mermaid renderer runs `command -v mmdc' and walks up from that
+  ;; path to node_modules/@mermaid-js/mermaid-cli. The Nix symlink layout in
+  ;; ~/.local/share/etaf-md must therefore come first on PATH.
+  (let ((etaf-shim (expand-file-name "~/.local/share/etaf-md/bin")))
+    (add-to-list 'exec-path etaf-shim)
+    (setenv "PATH" (concat etaf-shim path-separator (getenv "PATH")))))
 
 ;; [backup walker] A utility to view Emacs backup files.
 (use-package backup-walker
@@ -446,7 +461,8 @@
    eshell-aliases-file nil)
 
   (defun +eshell-toggle (&optional arg)
-    "Toggle a persistent Eshell popup window for the current project or directory.
+    "Toggle a persistent Eshell popup window for the current project.
+Or, without a project, for the current directory.
 If the popup is visible but unselected, select it.
 If the popup is focused, kill it.
 If no project is found, create a temporary Eshell instance in the current directory."
@@ -724,52 +740,15 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
                         'truncation
                         (make-glyph-code ?… 'shadow))
 
-;; Dispatcher: the ONLY tty-setup entry point for protocol-level terminal
-;; extras (kkp + kitty-graphics).  Branch decisions live in the prose
-;; above and in the research note (sections 6/7).
-(defun +tty-setup-features ()
-  "Enable terminal extras according to the attached terminal's TERM.
-Dispatch per frame `tty-type' (env TERM as fallback): kitty gets the
-full stack; ghostty keeps the keyboard protocol but gets no terminal
-graphics, because its graphics protocol subset plus video streaming
-cause redraw storms and tearing, and Emacs 31.1 has no synchronized
-output to hide either; anything else keeps the historical behaviour,
-since both packages gate themselves on terminal queries."
-  (pcase (or (frame-parameter nil 'tty-type)
-             (getenv "TERM"))
-    ;; kitty: both protocols' reference implementation; prior behaviour.
-    ("xterm-kitty"
-     (global-kkp-mode 1)
-     (kitty-graphics-setup))
-    ;; ghostty implements KKP, but its graphics protocol is a divergent
-    ;; subset and video streaming triggers per-frame redraw storms (H1);
-    ;; graphics stay off entirely on this branch.
-    ("xterm-ghostty"
-     (global-kkp-mode 1))
-    (_
-     ;; Anything else: kkp gates itself on the per-terminal CSI u query
-     ;; and stays inert without a reply; kitty-graphics self-disables
-     ;; when its probe finds no backend.  Old behaviour retained.
-     (global-kkp-mode 1)
-     (kitty-graphics-setup))))
-
-;; [Kitty Keyboard Protocol] Implements support for Kitty's "keyboard protocol",
-;; which allows the terminal to send key events to Emacs.
-(use-package kkp
-  :straight t
-  :hook (tty-setup . +tty-setup-features)
-  :init
-  ;; Read when the mode turns on, so this has to precede it. KKP sends
-  ;; C-g as CSI-u; without this, a blocking call-process cannot be quit.
-  (setq kkp-restore-legacy-keys-around-subprocesses t))
-
 ;; [xterm]
 (use-package term/xterm
-  :hook (tty-setup . xterm-mouse-mode)
   :init
-  (setq xterm-extra-capabilities '(modifyOtherKeys reportBackground
-                                                   getSelection setSelection)
-        xterm-set-window-title t)
+  (setq xterm-extra-capabilities '(modifyOtherKeys reportBackground setSelection)
+        ;; herdr 不转发 OSC 10/11 查询的回包（2026-11-25 实测：查询字符被原样
+        ;; 打到屏幕上、没有应答）。终端初始化时每个同步查询都会白等满
+        ;; `xterm-query-timeout'，默认 2 秒让 `emacsclient -t' 的 attach 多等
+        ;; 约 4 秒。0.2 秒足够接住正常终端的回包，也把无回包场景压到可忽略。
+        xterm-query-timeout 0.2)
 
   (defun +xterm-report-background ()
     "Query the terminal background color and reload the matching theme."

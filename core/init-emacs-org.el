@@ -23,7 +23,7 @@
   :config
   ;; Org 10.0 dropped the old alias kept in the comments below; preview
   ;; caching is governed by `org-latex-preview-cache' instead.  Retired
-  ;; 2026-11-19, see dev-docs/notes/org-preview-cache-research-2026-11-19.md.
+  ;; 2026-11-19.
   (setopt org-latex-preview-cache 'persist)
   (setq
    ;; Keep generated LaTeX previews out of note directories.
@@ -32,8 +32,9 @@
    ;; org-preview-latex-image-directory (no-littering-expand-var-file-name "org/latex/")
    ;; Recognize a), A), a., and A. as list markers.
    org-list-allow-alphabetical t
-   ;; Always use shift to select
-   org-support-shift-select 'always
+   ;; Always use shift to select; 'everywhere is the modern name for the
+   ;; old 'always (ORG-NEWS: timestamps gained their own exception value).
+   org-support-shift-select 'everywhere
 
    ;; subscription: Use {} for sub- or super- scripts
    org-use-sub-superscripts '{}
@@ -111,23 +112,6 @@
 
   (define-key org-src-mode-map (kbd "C-c C-c") #'org-edit-src-exit)
 
-  ;; Realign after edits that never move to another field.  Org only
-  ;; realigns inside `org-table-next-field' and `org-table-next-row', so
-  ;; typing and then moving away with an ordinary command leaves the row
-  ;; ragged.  This used to run when leaving meow's insert state, and meow
-  ;; is not loaded.
-  (add-hook! post-command-hook
-    (defun +org-realign-table-maybe-h ()
-      "Realign the Org table at point when its contents changed."
-      (when (and (derived-mode-p 'org-mode)
-                 org-table-automatic-realign
-                 (org-at-table-p)
-                 org-table-may-need-update)
-        (let ((point (point))
-              (inhibit-message t))
-          (org-table-align)
-          (goto-char point)))))
-
   ;; Give custom blocks such as #+begin_question the usual block face.
   (defun +org-fontify-special-blocks (limit)
     "Add `org-block' to special block contents found before LIMIT."
@@ -164,8 +148,7 @@
   ;; Better Org Latex Preview
   ;; The two old names kept in the comments below are obsolete aliases
   ;; that org-compat.el marks for removal in Org 10.0.  Migrated to the
-  ;; new names 2026-11-19, see
-  ;; dev-docs/notes/plugin-update-final-recommendations-2026-11-19.md.
+  ;; new names 2026-11-19.
   ;; (setq org-preview-latex-default-process 'dvisvgm
   ;;       org-startup-with-latex-preview nil
   ;;       org-highlight-latex-and-related '(latex))
@@ -233,7 +216,9 @@
          (org-agenda-finalize . org-modern-agenda))
   :config
   (setq org-modern-star 'replace
-        org-modern-replace-stars "◉○◈◇✳"))
+        org-modern-replace-stars "◉○◈◇✳"
+        ;; Leave tables with Org's plain appearance (2026-11-22).
+        org-modern-table nil))
 
 ;; [ox]
 (use-package ox
@@ -242,6 +227,10 @@
         org-html-validation-link nil
         org-latex-prefer-user-labels t
         org-export-with-latex t))
+
+;; [htmlize] Syntax highlighting for exported HTML source blocks
+(use-package htmlize
+  :straight t)
 
 ;; [org-typst-preview] Render native Typst formulae asynchronously.
 (use-package org-typst-preview

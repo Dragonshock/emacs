@@ -5,7 +5,8 @@
   :init
   (setq gptel-model 'auto/deepseek-flash
         gptel-default-mode 'org-mode
-        gptel-confirm-tool-calls nil)
+        ;; Upstream default: writing files and running bash still prompt.
+        gptel-confirm-tool-calls 'auto)
   ;; Pi reads Magpie's menu-bar picker from WebKit local storage.
   ;; `auto' is not that choice: it is WorkBuddy's own model id and
   ;; always resolves there.  Defined in :init so agent-shell can read
@@ -100,8 +101,7 @@ WebKit stores the value as a UTF-16LE blob.  Fall back to whatever
          ("C-c g d" . +gptel-quick-dict))
   :preface
   ;; [render] Local addition: stream responses into a reusable side-window
-  ;; buffer instead of the fork's posframe popup (see
-  ;; dev-docs/notes/gptel-render-non-popup-requirements-2026-02-11.md).
+  ;; buffer instead of the fork's posframe popup.
   (defvar +gptel-quick-render-function 'buffer
     "Where `+gptel-quick-region-or-buffer' renders results.
 `buffer' streams the response into a reusable \"*gptel-quick:

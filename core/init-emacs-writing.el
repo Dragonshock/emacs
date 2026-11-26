@@ -37,6 +37,29 @@
                         :inherit (intern (format "org-level-%d" (1+ i)))
                         :weight 'unspecified)))
 
+;; [etaf-md] Markdown reading view on ETAF/Ebox
+;; Straight resolves Package-Requires through the recipe cache, so a
+;; dependency later in the dolist is still "not found" when an earlier
+;; package pulls it in. Register all four recipes first, then build.
+(dolist (recipe '((ecss :type git :host github :repo "emacs-taf/ecss")
+                  (ebox :type git :host github :repo "emacs-taf/ebox")
+                  (etaf-ui :type git :host github :repo "emacs-taf/etaf-ui")
+                  (etaf :type git :host github :repo "emacs-taf/etaf")))
+  (straight-register-package recipe))
+(dolist (package '(ecss ebox etaf-ui etaf))
+  (straight-use-package package))
+
+(use-package etaf-md
+  ;; The renderer looks for scripts/mermaid-render.mjs under the built
+  ;; package directory, and straight flattens plain :files entries to the
+  ;; build root, so the prefixed sub-list keeps the scripts/ path.
+  :straight (:host github :repo "emacs-taf/etaf-md"
+                    :files (:defaults ("scripts" "scripts/mermaid-render.mjs")))
+  :commands (etaf-md-open etaf-md-preview)
+  :config
+  ;; 'auto: follow the active Emacs theme (also: dark / light / sepia)
+  (setq etaf-md-theme 'auto))
+
 ;; [md-babel] Execute Markdown fenced blocks through Org Babel
 (use-package md-babel
   :straight (:host github :repo "roife/md-babel")

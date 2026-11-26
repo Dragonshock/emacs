@@ -253,7 +253,23 @@ librime-lua and builds nothing.  `~/.nix-profile' stays as a fallback."
                                    rimel-predicate-current-uppercase-letter-p
                                    rimel-predicate-org-in-src-block-p
                                    rimel-predicate-org-latex-mode-p
-                                   rimel-predicate-tex-math-or-command-p)))
+                                   rimel-predicate-tex-math-or-command-p))
+  :config
+  ;; TTY: candidates in the echo area; posframe would draw a tty child
+  ;; frame over buffer text and can flicker on redraw (TUI analysis P3-4).
+  ;; `rimel-show-candidate' is a global defcustom read at show time, so
+  ;; bind it per selected frame instead of fixing it once at init: a
+  ;; daemon would otherwise decide from its own startup frame.
+  (defun +rimel-show-candidate-for-frame (fn &rest args)
+    "Call FN with `rimel-show-candidate' fitted to the selected frame."
+    (let ((rimel-show-candidate
+           (if (display-graphic-p)
+               rimel-show-candidate
+             'prompt)))
+      (apply fn args)))
+  (dolist (target '(rimel--show-candidates rimel--hide-candidates))
+    (unless (advice-member-p #'+rimel-show-candidate-for-frame target)
+      (advice-add target :around #'+rimel-show-candidate-for-frame))))
 
 (register-input-method "rimel" "Chinese" #'rimel-activate "中" "Rimel")
 

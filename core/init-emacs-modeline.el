@@ -112,19 +112,17 @@ left unchanged."
       "Update the cached Telega status in the tab bar."
       (when (and (featurep 'telega)
                  (telega-server-live-p))
+        ;; 只读 `unread_unmuted_count'，不再为每个未读事件遍历全部 chat
+        ;; 并跑两次 `telega-filter-chats'（上游 telega-core.el 的
+        ;; `telega-chats-list' 是 hash-table-values，O(N) 分配）。
         (setq +tab-bar-telega-indicator-cache
-              (let* ((chats (telega-chats-list))
-                     (online-p (funcall telega-online-status-function))
-                     (unread-count (or (plist-get telega--unread-chat-count :unread_unmuted_count) 0))
-                     (mention-count (apply #'+ (mapcar (telega--tl-prop :unread_mention_count)
-                                                       (telega-filter-chats chats '(and is-known mention)))))
-                     (reaction-count (apply #'+ (mapcar (telega--tl-prop :unread_reaction_count)
-                                                        (telega-filter-chats chats '(and is-known unread-reactions)))))
-                     (count (+ unread-count mention-count reaction-count))
+              (let* ((online-p (funcall telega-online-status-function))
+                     (count (or (plist-get telega--unread-chat-count :unread_unmuted_count) 0))
                      (text (propertize (concat " T" (unless (zerop count) (number-to-string count)) " ")
                                        'face `(:inherit font-lock-keyword-face :inverse-video ,online-p))))
                 `((tab-bar-telega menu-item ,text telega
-                                  :help "Open Telega"))))))
+                                  :help "Open Telega"))))
+        (force-mode-line-update t)))
 
     (add-hook! (telega-ready-hook
                 telega-chats-fetched-hook

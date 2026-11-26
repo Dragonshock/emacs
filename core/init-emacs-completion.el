@@ -148,10 +148,10 @@
    consult-ripgrep consult-git-grep consult-grep
    consult-bookmark consult-recent-file
    consult-buffer
-   :preview-key "s-p")
+   :preview-key "C-M-p")
   (consult-customize
    consult-theme
-   :preview-key (list "s-p" :debounce 0.6 'any))
+   :preview-key (list "C-M-p" :debounce 0.6 'any))
 
   (defvar +consult-source-fd
     (list :name     "Find"
@@ -212,6 +212,9 @@
               ("RET" . nil))
   :config
   (setq corfu-cycle t
+        ;; corfu-mode is only enabled in the modes listed in the :hook
+        ;; above, so this global value never reaches a buffer whose capf
+        ;; is untrusted (README: capf may run arbitrary code).
         corfu-auto t
         corfu-auto-prefix 2
         corfu-preselect 'first

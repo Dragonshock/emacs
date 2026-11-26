@@ -1,13 +1,23 @@
-#+title: Emacs configuration (single source of truth)
+#+title: Emacs configuration
 #+author: dragon
 #+startup: content indent
 #
-# 本文件是 B（~/.config/emacs）的唯一真源。所有 core/init-emacs-*.el 由
-# org-babel-tangle 生成，不要直接编辑生成物。
+# 本文件是本机 Emacs 配置的唯一真源（~/.config/emacs/emacs-config.org）。
 #
-# 编辑后执行 C-c C-v C-t（org-babel-tangle）。
+# 它既是说明文档也是源码：每节先用散文讲清这一块为什么这样配，紧随其后的
+# #+begin_src emacs-lisp 代码块才是真正执行的配置。
 #
-# 方案见 dev-docs（在 dotfiles 仓库的 emacs/dev-docs，023/024/025）。
+# 日常使用只有三步：
+#   1. 只改本文件。early-init.el、init.el 与 core/init-emacs-*.el 都是 tangle
+#      产物，直接改会在下一次 tangle 时被覆盖。
+#   2. 改完在 Org 里执行 C-c C-v C-t（org-babel-tangle）。
+#   3. 新增包时在对应模块的代码块里加 use-package，:tangle 指向该模块的
+#      core/init-emacs-<area>.el；模块地图见下文
+#      「Anatomy of this Emacs configuration」，加载顺序见
+#      「The main initialisation of Emacs (=init.el=)」。
+#
+# 规则与调研在 dev-docs/：GUIDE.md 是写作与文档规则，MAP.md 是状态与索引，
+# notes/ 是各子系统分析与外部配置调研。
 
 * Details of this Emacs build
 
@@ -322,6 +332,9 @@ echo area 被裁的问题。
 
 ~tool-bar-setup~ 的 ~:override~ advice 省掉工具栏初始化的工作——工具栏关着的时候那些工作全是白做。
 最后给 frame 起名 ~home~，让 ~select-frame-by-name~ 和窗口管理器都能按名字找到它。
+
+这组 toolbar / scrollbar 抑制只对 GUI 帧有意义：TUI 帧本来就没有 toolbar 与滚动条，这些帧参数
+在终端里是空操作。保留它们是为了 GUI 会话（以及同一配置下的 ~emacs -nw~），终端行为不受影响。
 
 #+begin_src emacs-lisp :tangle early-init.el
 ;; Inhibit implicit frame resizing (font changes must not resize the frame).
@@ -1211,7 +1224,10 @@ File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这�
 ~glyphless-mode~ 是内置的全局 minor mode：把无法显示的字符换成占位框，免得在字体缺字时看到空白或
 豆腐块。它的 Commentary 很短，行为都写在 ~glyphless-char-display-control~ 里。
 
-这里只有一行 ~after-init~ 打开它——没有需要调的参数，本配置也不改 ~glyphless-mode-types~。
+上游默认把 ~format-control~ 与 ~variation-selectors~ 画成 ~thin-space~,而占位用的 ~glyphless-char~
+face 自带 ~:underline t~——于是每个零宽字符（Telegram 文本里常见的 ZWJ、变体选择符等）都会占一个
+带下划线的格子。TUI 下这些格子叠在文字行上，看起来就是「字上一条横线」加列错位。这里把这两类改成
+~zero-width~（不显示、不占列），~no-font~ 仍用 ~hex-code~ 便于发现真正缺字。
 
 + 包名（Emacs 内置）：~glyphless-mode~
 + Git 仓库：
@@ -1220,7 +1236,16 @@ File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这�
 #+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [glyphless-display] Don't render glyphs, in case of undisplayable characters.
 (use-package glyphless-mode
-  :hook (after-init . glyphless-display-mode))
+  :hook (after-init . glyphless-display-mode)
+  :config
+  ;; Upstream draws format-control and variation-selector characters as a
+  ;; thin space, and the glyphless-char face underlines it.  In a TTY those
+  ;; underlined cells look like a line through the text and shift columns;
+  ;; both groups are zero-width characters, so draw nothing instead.
+  (setq glyphless-char-display-control
+        '((format-control . zero-width)
+          (variation-selectors . zero-width)
+          (no-font . hex-code))))
 #+end_src
 
 *** The =init-emacs-core.el= section for scrolling
@@ -1396,7 +1421,13 @@ README 的问题陈述是「命令在 shell 里能用，在 Emacs 里不能」�
           "JAVA_HOME" "JAVA21_HOME" "JAVA26_HOME" "JDTLS_JAVA_HOME"))
   ;; External programs can be needed by mode hooks during startup, so import
   ;; the login-shell environment before the rest of the configuration loads.
-  (exec-path-from-shell-initialize))
+  (exec-path-from-shell-initialize)
+  ;; etaf-md's mermaid renderer runs `command -v mmdc' and walks up from that
+  ;; path to node_modules/@mermaid-js/mermaid-cli. The Nix symlink layout in
+  ;; ~/.local/share/etaf-md must therefore come first on PATH.
+  (let ((etaf-shim (expand-file-name "~/.local/share/etaf-md/bin")))
+    (add-to-list 'exec-path etaf-shim)
+    (setenv "PATH" (concat etaf-shim path-separator (getenv "PATH")))))
 #+end_src
 
 *** The =init-emacs-core.el= section for ~backup-walker~
@@ -1539,7 +1570,8 @@ Eshell 是内置的 Emacs 原生 shell：Commentary 说它用起来像 shell mod
    eshell-aliases-file nil)
 
   (defun +eshell-toggle (&optional arg)
-    "Toggle a persistent Eshell popup window for the current project or directory.
+    "Toggle a persistent Eshell popup window for the current project.
+Or, without a project, for the current directory.
 If the popup is visible but unselected, select it.
 If the popup is focused, kill it.
 If no project is found, create a temporary Eshell instance in the current directory."
@@ -1925,8 +1957,8 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 终端里没有 fringe，折行与截断只能借用 ~standard-display-table~ 的两个槽位：~wrap~ 与 ~truncation~
 各放一个 glyph（~↩~ 与 ~…~），颜色用 ~shadow~。
 
-这两个 ~set-display-table-slot~ 只在 tty 有意义，所以放在 kkp 与 xterm 这两块终端设置旁边，而不
-是放进 ~init-emacs-ui~。
+这两个 ~set-display-table-slot~ 只在 tty 有意义，所以放在下面 xterm 这块终端设置旁边，而不是
+放进 ~init-emacs-ui~。它们保持无条件、不挂 ~tty-setup-hook~：没有协议探测的副作用，风险低。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; warp/truncation indicator in tty
@@ -1939,98 +1971,44 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
                         (make-glyph-code ?… 'shadow))
 #+end_src
 
-*** The =init-emacs-core.el= section for ~kkp~
+*** Removed: ~kkp~ and the ~+tty-setup-features~ dispatcher
 
-~kkp~ 实现 Kitty Keyboard Protocol 这一侧的支持：终端通过它把更详细的按键信息发给 Emacs，于是
-~C-<backspace>~ 与 ~C-h~ 可以被区分，也能表达更多组合键与 Hyper/Super；README 对比了 xterm 的
-~modifyOtherKeys~，指出它覆盖的键更多，还能动态探测终端是否支持。
-
-目前 ghostty 上报告的性能问题（帧内容突然崩、刷新时叠影/撕裂）集中在 tty 侧的全家桶上，所以终端里的
-两件协议级配置（本节的 kkp 与 ~init-emacs-ui~ 的 kitty-graphics）不再各自直接挂 ~tty-setup~，而是统一
-交给一个分流器 ~+tty-setup-features~：它是 tty 特性挂在 ~tty-setup-hook~ 上的唯一入口，按帧的
-~tty-type~（回退到环境变量 ~TERM~）分三个分支，决定见调研笔记第六/七节：
-
-+ ~xterm-kitty~：KKP 与 kitty-graphics 全开——原行为不变，kitty 是这两个协议的正主。
-+ ~xterm-ghostty~：KKP 开（ghostty 实现了 KKP），kitty-graphics 整体不装（不是只关视频）。理由：
-  ghostty 的 graphics protocol 实现相对 kitty 官方有子集/行为差异，而包的探测
-  ~kitty-graphics--kitty-detect~ 会把 ~GHOSTTY_RESOURCES_DIR~ / ~GHOSTTY_BIN_DIR~ /
-  ~TERM_PROGRAM=ghostty~ 认作支持，模式在 ghostty 上会真激活而不是自禁；叠加上本配置的
-  ~kitty-graphics-enable-video t~，逐帧流式传输带来的重绘风暴正是调研的首要嫌疑（H1）。而
-  Emacs 31.1 的 =term/xterm.el= 没有实现 Synchronized Output（H4，grep 实证，要等 32），撕裂
-  无法靠终端同步掩盖，只能靠不在 ghostty 上流式传输图形来根治。
-+ 其它 TERM：维持老行为。KKP 照开是安全的——kkp 逐终端发 ~CSI ?<flags>u~ 查询
-  （~kkp-enable-in-terminal~），应答不匹配 ~kkp--terminal-setup~ 的模式就放弃、按提示等下一次焦点
-  切换重试，~kkp-with-legacy-keys~ 在 KKP 未激活的终端上是 no-op，对不支持 KKP 的终端零副作用；
-  kitty-graphics 照调 ~kitty-graphics-setup~，它的全局模式在 ~kitty-graphics--detect-protocol~
-  探测失败时会自禁并说明原因，同样不用我们替它猜终端。
-
-两个包的 ~use-package~ 声明原样保留（配方与 ~:init~ 变量都在），只把「何时开」从各自的 ~:hook~ 收归
-到分流器：kitty-graphics 一节的 ~:hook~ 同步撤掉，由这里的 kitty 分支跨模块调用。跨模块是安全的——
-~kitty-graphics-setup~ 本来就是 autoload，而 ~tty-setup-hook~ 只在终端帧初始化时才运行，那时所有
-模块早已加载完毕，不存在加载顺序问题。
-
-分流器内部先开 KKP 再调 ~kitty-graphics-setup~：后者的探测用 ~read-event~ 读终端应答，会吃掉别的
-tty-setup 消费者还在等的回包（它自己的注记引 issue #33，所以主动推迟到 idle timer）；先让 kkp 的异步
-查询上手，是同一条教训的正向应用。鼠标（~xterm-mouse-mode~）、编码系统与折行/截断 glyph 不进分流
-器、保持无条件：它们没有协议探测的副作用，风险低。
-
-~:init~ 里那句 ~kkp-restore-legacy-keys-around-subprocesses t~ 必须在模式打开之前设——注释写明理
-由：KKP 会把 ~C-g~ 发成 CSI-u，不设它就无法中断一个阻塞中的 ~call-process~。
-
-+ 包名（MELPA）：~kkp~
-+ Git 仓库：
-  - GitHub：<https://github.com/benotn/kkp>
-
-#+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
-;; Dispatcher: the ONLY tty-setup entry point for protocol-level terminal
-;; extras (kkp + kitty-graphics).  Branch decisions live in the prose
-;; above and in the research note (sections 6/7).
-(defun +tty-setup-features ()
-  "Enable terminal extras according to the attached terminal's TERM.
-Dispatch per frame `tty-type' (env TERM as fallback): kitty gets the
-full stack; ghostty keeps the keyboard protocol but gets no terminal
-graphics, because its graphics protocol subset plus video streaming
-cause redraw storms and tearing, and Emacs 31.1 has no synchronized
-output to hide either; anything else keeps the historical behaviour,
-since both packages gate themselves on terminal queries."
-  (pcase (or (frame-parameter nil 'tty-type)
-             (getenv "TERM"))
-    ;; kitty: both protocols' reference implementation; prior behaviour.
-    ("xterm-kitty"
-     (global-kkp-mode 1)
-     (kitty-graphics-setup))
-    ;; ghostty implements KKP, but its graphics protocol is a divergent
-    ;; subset and video streaming triggers per-frame redraw storms (H1);
-    ;; graphics stay off entirely on this branch.
-    ("xterm-ghostty"
-     (global-kkp-mode 1))
-    (_
-     ;; Anything else: kkp gates itself on the per-terminal CSI u query
-     ;; and stays inert without a reply; kitty-graphics self-disables
-     ;; when its probe finds no backend.  Old behaviour retained.
-     (global-kkp-mode 1)
-     (kitty-graphics-setup))))
-
-;; [Kitty Keyboard Protocol] Implements support for Kitty's "keyboard protocol",
-;; which allows the terminal to send key events to Emacs.
-(use-package kkp
-  :straight t
-  :hook (tty-setup . +tty-setup-features)
-  :init
-  ;; Read when the mode turns on, so this has to precede it. KKP sends
-  ;; C-g as CSI-u; without this, a blocking call-process cannot be quit.
-  (setq kkp-restore-legacy-keys-around-subprocesses t))
-#+end_src
+历史记录（2026-11-25）：Kitty Keyboard Protocol 支持（~kkp~）及其 ~tty-setup~ 入口
+~+tty-setup-features~ 已从本配置删除。~kkp~ 用 ~CSI ?<flags>u~ 逐终端探测 KKP，只有在终端应答
+匹配 ~kkp--terminal-setup~ 的模式时才激活；在 herdr 里的 Ghostty 终端上实测 ~kkp-status~ 报
+"KKP not active in this terminal"，即它从未真正激活，那层薄入口（以及此前已经删掉的
+~kitty-graphics~ 栈）只留下维护成本。将来若要恢复，直接照上游 README（<https://github.com/benotn/kkp>）
+重新接入，并先把 ~kkp-restore-legacy-keys-around-subprocesses~ 在模式打开之前设上——KKP 会把 ~C-g~
+发成 CSI-u，不设它就无法中断阻塞中的 ~call-process~。
 
 *** The =init-emacs-core.el= section for =term/xterm=
 
 =term/xterm= 是内置库，负责在 xterm 兼容终端里多问几个能力查询（extra capabilities），包括
 ~modifyOtherKeys~、~reportBackground~、~getSelection~ / ~setSelection~。
 
-~xterm-extra-capabilities~ 把四项显式列出来，不去猜终端；~xterm-set-window-title t~ 让终端标题跟
-着 buffer 名走。~+xterm-report-background~ 是手动的兜底入口：主动查询终端背景色（OSC 11），拿到
-后交给 ~xterm--set-background-mode~，让 ~background-mode~ 终端参数有意义，再调一次
-~+load-theme~。这是 tty 下跟随明暗主题的路径，与 ~init-emacs-platform~ 那条图形帧路径互补。
+~xterm-extra-capabilities~ 只显式列出 =modifyOtherKeys=、=reportBackground= 和
+=setSelection=，不去猜终端。
+
+~xterm-set-window-title~ 与 ~xterm-mouse-mode~ 于 2026-11-25 移除（stock-TUI 理由）：前者默认
+nil，打开后每个命令都写一次 OSC 2 标题序列，而 herdr 自己管 pane 标题、Ghostty 管窗口标题，那是
+per-keystroke 的无用转义写入；后者对 ~xterm-256color~ 默认关闭（Emacs 31 只对白名单终端自动开），
+强制打开会拿走终端自己的选择/回滚，并可能与 herdr 的鼠标处理冲突。
+
+这里**故意不列 =getSelection=**。它会让 Emacs 在每次 kill/yank 前同步发 OSC 52 去读系统
+剪贴板（`term/xterm.el` 的 `gui-backend-get-selection` + `'no-async`），而 herdr（以及默认
+配置的 Ghostty）不回这个读请求，于是每次 kill/yank 都白等满 `xterm-query-timeout`（默认 2
+秒）。=setSelection= 不受影响，kill 的内容仍会用 OSC 52 写进系统剪贴板；从系统剪贴板往
+Emacs 里粘，用终端自己的 bracketed paste（Cmd+V / 终端粘贴）即可。
+
+~xterm-query-timeout~ 在这里显式降到 0.2 秒。herdr 不转发 OSC 10/11 的回包（实测查询字符
+被原样打到屏幕上、终端没有应答），而终端初始化阶段的能力查询是同步的，每个无回包查询都要等满
+这个超时；默认的 2 秒让 `emacsclient -t` 的 attach 多等约 4 秒。0.2 秒既够正常终端回包，也让
+herdr 场景的等待可忽略。herdr 保持官方默认配置，不做任何改动。
+
+~+xterm-report-background~ 是手动/一次性查询入口：主动查询终端背景色（OSC 11），拿到后交给
+~xterm--set-background-mode~，让 ~background-mode~ 终端参数有意义，再调一次 ~+load-theme~。
+非 daemon 的 TUI 启动无法在初始帧建立前打开 ~reportBackground~，所以 ~init-emacs-theme~ 在
+~window-setup-hook~ 上用它补查一次；它同时也保留了手动排查明暗主题的入口。
 
 + 包名（Emacs 内置）：=term/xterm=
 + Git 仓库：
@@ -2039,11 +2017,13 @@ since both packages gate themselves on terminal queries."
 #+begin_src emacs-lisp :tangle core/init-emacs-core.el :mkdirp yes
 ;; [xterm]
 (use-package term/xterm
-  :hook (tty-setup . xterm-mouse-mode)
   :init
-  (setq xterm-extra-capabilities '(modifyOtherKeys reportBackground
-                                                   getSelection setSelection)
-        xterm-set-window-title t)
+  (setq xterm-extra-capabilities '(modifyOtherKeys reportBackground setSelection)
+        ;; herdr 不转发 OSC 10/11 查询的回包（2026-11-25 实测：查询字符被原样
+        ;; 打到屏幕上、没有应答）。终端初始化时每个同步查询都会白等满
+        ;; `xterm-query-timeout'，默认 2 秒让 `emacsclient -t' 的 attach 多等
+        ;; 约 4 秒。0.2 秒足够接住正常终端的回包，也把无回包场景压到可忽略。
+        xterm-query-timeout 0.2)
 
   (defun +xterm-report-background ()
     "Query the terminal background color and reload the matching theme."
@@ -2475,10 +2455,24 @@ liberime-regexp 在 librime-lua 之上提供正则候选；2026-10 重构（c106
 
 *** The =init-emacs-ime.el= section for ~rimel~
 
-rimel 是 Rime 的 input-method 前端：posframe 横排候选、inline preedit、一组 disable
-predicate 让它在代码与公式环境里自动退到英文。注意 ~default-input-method~ 在这里设为
-~"rimel"~——所有权从 core 的编码小节移交到此。小节末尾的 ~register-input-method~ 把 rimel
-登记成输入法，~toggle-input-method~（包括 platform 里的 ~s-SPC~）从此有法可切。
+rimel 是 Rime 的 input-method 前端：图形帧用 posframe 横排候选，终端帧改用 minibuffer prompt；
+inline preedit 与一组 disable predicate 让它在代码与公式环境里自动退到英文。注意
+~default-input-method~ 在这里设为 ~"rimel"~——所有权从 core 的编码小节移交到此。小节末尾的
+~register-input-method~ 把 rimel 登记成输入法，~toggle-input-method~ 从此有法可切。
+
+TTY 为什么不用 posframe（2026-11-25 复核）：posframe 1.5.4 在 Emacs 31 的 ~tty-child-frames~
+上确实能画候选框，位置也对，但它是盖在缓冲区文字上的 child frame，重绘时的闪烁/叠字只能靠肉眼
+观察（TUI 分析的 P3-4）；rimel 上游 README 只提供 posframe / prompt 二选一，并说明 prompt 是
+文档化的回退。~rimel-show-candidate~ 是全局 defcustom、在弹候选时才读，所以不能在建配置时用
+~display-graphic-p~ 一次定值（daemon 会按自己的启动帧误判）：这里给 ~rimel--show-candidates~ 与
+~rimel--hide-candidates~ 各加一个 ~:around~ advice，按当前选中帧把变量绑定成 ~posframe~（图形）
+或 ~prompt~（终端）。~rimel-inline-preedit t~ 仍会在光标处显示原始拼音，终端里不会失去 preedit。
+
+关于 Rime userdb 的锁（2026-11-24 体检结论）：~rime_frost_simplified.userdb/LOCK~ 曾被
+Squirrel 输入法本体（PID 966）持有，而 GUI Emacs 即使单实例也报过
+~Resource temporarily unavailable~——冲突在系统输入法侧，与是否同时开 GUI/TUI 两个 Emacs
+无关，因此不为此改配置。使用约束仍是：同一时刻只让一个 Emacs 实例初始化 Rime；在终端里用
+~emacsclient -t~ 接入同一实例，而不是另起一个独立 TUI 进程。
 
 + 包名（GitHub emacs-rime/rimel）：~rimel~
 + Git 仓库：
@@ -2506,7 +2500,23 @@ predicate 让它在代码与公式环境里自动退到英文。注意 ~default-
                                    rimel-predicate-current-uppercase-letter-p
                                    rimel-predicate-org-in-src-block-p
                                    rimel-predicate-org-latex-mode-p
-                                   rimel-predicate-tex-math-or-command-p)))
+                                   rimel-predicate-tex-math-or-command-p))
+  :config
+  ;; TTY: candidates in the echo area; posframe would draw a tty child
+  ;; frame over buffer text and can flicker on redraw (TUI analysis P3-4).
+  ;; `rimel-show-candidate' is a global defcustom read at show time, so
+  ;; bind it per selected frame instead of fixing it once at init: a
+  ;; daemon would otherwise decide from its own startup frame.
+  (defun +rimel-show-candidate-for-frame (fn &rest args)
+    "Call FN with `rimel-show-candidate' fitted to the selected frame."
+    (let ((rimel-show-candidate
+           (if (display-graphic-p)
+               rimel-show-candidate
+             'prompt)))
+      (apply fn args)))
+  (dolist (target '(rimel--show-candidates rimel--hide-candidates))
+    (unless (advice-member-p #'+rimel-show-candidate-for-frame target)
+      (advice-add target :around #'+rimel-show-candidate-for-frame))))
 
 (register-input-method "rimel" "Chinese" #'rimel-activate "中" "Rimel")
 #+end_src
@@ -2585,13 +2595,22 @@ macOS 上轮询 ~AppleInterfaceStyle~，两边都只调用 ~+system-appearance-c
 读这个变量，读不到时回落到 ~ns-system-appearance~，再回落到深色。因此有一条加载顺序约束：本模块
 必须早于 ~init-emacs-platform~，否则平台层第一次调用时主题层还没准备好。
 
-~+load-theme~ 自己按帧类型分叉：图形帧看 ~+system-appearance~，终端帧看 ~background-mode~ 这个终
-端参数（终端能报告背景色时才有值）。值得说明的是那句 ~mapc #'disable-theme~——ashen 由明暗两个主
-题组成，直接叠加载时后一个的 face 会覆盖前一个，但前一个留下的 face 集合不会消失，最终结果取决于
-加载顺序而不是当前外观；先全部关掉再加载，结果就只由「现在是什么外观」决定。
+~+load-theme~ 自己按帧类型分叉：图形帧看 ~+system-appearance~，终端帧只看**终端参数**
+~background-mode~，未知时回退深色而不是 ~light~。这一点在 2026-11-25 修过：TTY 上帧参数
+~background-mode~ 可能是 xterm 在背景未知时先填的默认 ~light~（=frame.el:1511-1517=），旧实现把它
+当证据，于是 ~emacs -nw~ 的初始帧在 init 时就选了 day 主题；而 ~tty-setup-hook~ 与
+~after-make-frame-functions~ 都赶不上初始帧（初始帧在 init 文件之前建立）。现在只有终端真报告过
+背景才采用该值，否则回退 ~ashen-night~。主题是会话全局的，所以终端帧在有图形帧时不切换主题——那会
+把 GUI 一起改掉。
+
+值得说明的是那句 ~mapc #'disable-theme~——ashen 由明暗两个主题组成，直接叠加载时后一个的 face 会
+覆盖前一个，但前一个留下的 face 集合不会消失，最终结果取决于加载顺序而不是当前外观；先全部关掉再
+加载，结果就只由「现在是什么外观」决定。
 
 ~after-make-frame-functions~ 上另有一个函数，负责新建图形帧时补一次，因为 daemon 的第一个帧可能
-晚于这一切。
+晚于这一切。终端侧另有两处补丁：~xterm--report-background-handler~ 的 advice 处理异步 OSC 11
+回包（原 handler 只存颜色，不设 ~background-mode~、不重载主题），~window-setup-hook~ 上的
+~+tty-query-background-once~ 则为非 daemon 的 TUI 首帧补查一次背景。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-theme.el :mkdirp yes
 (defun +system-appearance-changed (appearance)
@@ -2602,23 +2621,44 @@ macOS 上轮询 ~AppleInterfaceStyle~，两边都只调用 ~+system-appearance-c
     (with-selected-frame frame
       (+load-theme))))
 
+(defun +theme-for-appearance (appearance)
+  "Return the theme symbol for APPEARANCE, `light' or `dark'."
+  (if (eq appearance 'dark) +dark-theme +light-theme))
+
+(defun +tty-appearance (&optional frame)
+  "Return the appearance FRAME's terminal reported, or nil.
+Only the terminal parameter counts.  The terminal frame's
+`background-mode' parameter may already be the xterm default `light'
+chosen before the background was known."
+  (terminal-parameter (or frame (selected-frame)) 'background-mode))
+
 (add-hook! tty-setup-hook :unless-daemonp-call-immediately
   (defun +load-theme (&optional theme)
-    "Load THEME, or choose a theme matching the system or terminal."
-    (setq theme
-          (or theme
-              (if (eq (if (display-graphic-p)
-                          (or +system-appearance
-                              (and (boundp 'ns-system-appearance) ns-system-appearance)
-                              'dark)
-                        (or (terminal-parameter nil 'background-mode)
-                            (frame-parameter nil 'background-mode)))
-                      'dark)
-                  +dark-theme
-                +light-theme)))
-    (unless (member theme custom-enabled-themes)
-      (mapc #'disable-theme custom-enabled-themes)
-      (load-theme theme t))))
+    "Load THEME, or choose the theme matching the selected frame.
+Themes are global in Emacs, so a terminal frame never switches the
+theme while a graphical frame exists: that would change the GUI too.
+An unreported terminal background falls back to dark, not to the
+xterm default light."
+    (let* ((frame (selected-frame))
+           (graphical (display-graphic-p frame))
+           (gui-present (seq-find #'display-graphic-p (frame-list))))
+      (when (or theme graphical (null gui-present))
+        (when (and (not graphical) (+tty-appearance frame))
+          ;; Make the frame parameter agree before the theme's face
+          ;; specs are realized, then let the theme apply.
+          (frame-set-background-mode frame))
+        (setq theme
+              (or theme
+                  (+theme-for-appearance
+                   (if graphical
+                       (or +system-appearance
+                           (and (boundp 'ns-system-appearance)
+                                ns-system-appearance)
+                           'dark)
+                     (or (+tty-appearance frame) 'dark)))))
+        (unless (member theme custom-enabled-themes)
+          (mapc #'disable-theme custom-enabled-themes)
+          (load-theme theme t))))))
 
 (add-hook! after-make-frame-functions
   (defun +load-theme-for-frame (frame)
@@ -2626,6 +2666,42 @@ macOS 上轮询 ~AppleInterfaceStyle~，两边都只调用 ~+system-appearance-c
     (when (display-graphic-p frame)
       (with-selected-frame frame
         (+load-theme)))))
+#+end_src
+
+#+begin_src emacs-lisp :tangle core/init-emacs-theme.el :mkdirp yes
+(defun +tty-apply-reported-background (&rest _)
+  "Adopt a late OSC 11 reply for the selected terminal, then repick.
+`xterm--report-background-handler' stores only the colour in
+`xterm--background-color'; the terminal's `background-mode' parameter
+and the theme stay stale, so the TTY keeps the xterm default light."
+  (let* ((frame (selected-frame))
+         (term (frame-terminal frame))
+         (rgb (terminal-parameter term 'xterm--background-color)))
+    (when (and rgb (not (display-graphic-p frame)))
+      (apply #'xterm--set-background-mode rgb)
+      (dolist (f (frame-list))
+        (when (eq (frame-terminal f) term)
+          (frame-set-background-mode f)))
+      (+load-theme))))
+
+(with-eval-after-load 'term/xterm
+  (unless (advice-member-p #'+tty-apply-reported-background
+                           'xterm--report-background-handler)
+    (advice-add 'xterm--report-background-handler
+                :after #'+tty-apply-reported-background)))
+
+(defun +tty-query-background-once ()
+  "Query the terminal background once for a non-daemon TUI start.
+The initial terminal frame is created before any init file runs, so
+`reportBackground' cannot be enabled in time for it."
+  (when (and (not (daemonp))
+             (not (display-graphic-p))
+             (null (+tty-appearance (selected-frame)))
+             (fboundp '+xterm-report-background))
+    (let ((xterm-query-timeout 0.15))
+      (+xterm-report-background))))
+
+(add-hook 'window-setup-hook #'+tty-query-background-once)
 #+end_src
 
 *** The =init-emacs-theme.el= section to provide the feature
@@ -2639,7 +2715,8 @@ macOS 上轮询 ~AppleInterfaceStyle~，两边都只调用 ~+system-appearance-c
 ** The =init-emacs-ui.el= module
 
 帧与显示层的开关都在这里：重绘与光标、行号、fringe 位图、像素级尺寸、minibuffer 的显示细节、字体与
-fallback、鼠标滚动、window-divider、连字、滚动进度条、终端图形。它们彼此独立，所以下面按原代码里
+fallback、鼠标滚动、window-divider、连字、滚动进度条。终端图形（~kitty-graphics~）随 2026-11-25
+的 stock-TUI 收窄整节删除，理由见 ~init-emacs-core~ 的「Removed: kkp」移除记录。它们彼此独立，所以下面按原代码里
 ~;; [feature]~ 注释的顺序一节一件；唯一有内部先后的是字体那一节——它要在第一个帧建好之后才成
 立。颜色不归这里管：主题在 ~init-emacs-theme~，本节只管骨架。
 
@@ -2900,6 +2977,10 @@ charset 会把 Latin 字体一起顶掉，所以没有那样做。
 并且把 ~((control) . nil)~ 写成了关掉——Ctrl+滚轮原本做 text-scale，缩放已经有 ~init-emacs-window~ 的键
 位，滚轮上再挂一份只会误触。
 
+~((shift) . hscroll)~ 的一项只在有 GUI 鼠标时才有意义：它把 Shift+滚轮映射成横向滚动，靠的是
+GUI 帧的鼠标事件。TTY 帧自 ~xterm-mouse-mode~ 移除后（见 =term/xterm= 一节）不再把滚轮事件交给
+Emacs，终端自己的 Shift+滚轮行为照旧由终端处理，这一项在终端里不生效。
+
 #+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
 ;; Smooth Scroll (less "jumpy" than defaults)
 (setq mouse-wheel-scroll-amount '(2 ((shift) . hscroll) ((control) . nil))
@@ -3027,43 +3108,6 @@ MonoLisaCode，实际字体是 PragmataPro Liga，表没动）。Org 必须排�
       '((:eval (or buffer-file-truename "%b"))))
 #+end_src
 
-*** The =init-emacs-ui.el= section for ~kitty-graphics~
-
-~kitty-graphics~ 在支持 Kitty graphics protocol 或 Sixel 的终端里内联显示图片，额外还能内联播视频
-（mpv）、按字号渲染 Org 标题、给 doc-view 画 PDF。README 说后端在启动时自动选择，所以同一份配置在
-kitty、wezterm、foot 以及 tmux 里都成立。
-
-启用入口已收归 ~init-emacs-core~ 里的分流器 ~+tty-setup-features~（见 kkp 一节的分支决定）：不再直接挂
-~tty-setup~ 调 ~kitty-graphics-setup~，只保留包声明与 ~:init~ 变量。分流结果：TERM ~xterm-kitty~ 上照旧
-调 ~kitty-graphics-setup~（视频也照开）；~xterm-ghostty~ 上完全不调——ghostty 的 graphics protocol
-实现是 kitty 官方的子集，与包的上游假设有行为差异，叠加 ~kitty-graphics-enable-video t~ 的逐帧流
-式传输后，重绘风暴正是 ghostty 上叠影/撕裂的首要嫌疑（调研 H1）；而 Emacs 31.1 尚无 Synchronized
-Output（H4），撕裂不能靠终端同步掩盖，只能不在 ghostty 上流式传输图形。其它 TERM 上照调，全局模式在
-~kitty-graphics--detect-protocol~ 探测失败时会自禁。ghostty 分支里视频开关没有意义，因为整个入口都不
-调——关的是 graphics 而不只是 video（这是分流决定里刻意强调的）。
-
-~kitty-graphics-setup~ 这个函数本身仍是跨模块（init-emacs-core → init-emacs-ui）调用的合适入口：它
-同时兼容 daemon、GUI server 与 ~emacs -nw~ 三种情形——daemon 启动时没有终端，全局模式在那里判断不了
-能力，所以它只是注册一个到第一个终端帧才开模式的 hook，并只在已是终端时立即开。分流器只在这种入口
-的上面加一层 TERM 白名单，不改变函数自身的用途。
-
-+ 包名（GitHub cashmeredev/kitty-graphics.el）：~kitty-graphics~
-+ Git 仓库：
-  - GitHub：<https://github.com/cashmeredev/kitty-graphics.el>
-
-#+begin_src emacs-lisp :tangle core/init-emacs-ui.el :mkdirp yes
-;; [Kitty Graphics Protocol] Implements support for Kitty's "graphics protocol",
-;; which allows the terminal to display images and videos inline.
-;; Enabled (only) by `+tty-setup-features' in init-emacs-core: kitty TERM yes,
-;; ghostty TERM no (protocol subset + video redraw storms, research H1).
-(use-package kitty-graphics
-  :straight (:type git :host github :repo "cashmeredev/kitty-graphics.el")
-  ;; Video streaming stays on for kitty; the ghostty branch never calls
-  ;; kitty-graphics-setup, so video (and all graphics) never start there.
-  :init
-  (setq kitty-graphics-enable-video t))
-#+end_src
-
 *** The =init-emacs-ui.el= section to provide the feature
 
 ~provide~ 把 ~init-emacs-ui~ 登记成 feature，这个模块的加载到此结束。
@@ -3148,7 +3192,7 @@ macOS 的外观只有一条权威来源：~defaults read -g AppleInterfaceStyle~
 同一个 ~when~ 里还有快捷键。~mac-command-modifier~ / ~mac-option-modifier~ 那两行是注释掉的，当前的
 选择是保留系统的 Command 语义，再用 ~s-~ 前缀把最常用的 macOS 习惯键接到编辑命令上（~s-a~ 全选、
 ~s-x~ / ~s-c~ / ~s-v~ 剪贴板、~s-z~ / ~s-Z~ 撤销与重做、~s-s~ 保存、~s-f~ 搜索、~s-t~ / ~s-w~ 新建与
-关闭标签、~s-o~ 切窗口、~s-SPC~ 输入法），并解绑 ~s-,~——它默认弹出 Emacs 的相关选项，容易与系统偏
+关闭标签、~s-o~ 切窗口），并解绑 ~s-,~——它默认弹出 Emacs 的相关选项，容易与系统偏
 好设置混淆。两件事共用一个 ~(when (eq system-type 'darwin) ...)~，所以合成一节、一块。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-platform.el :mkdirp yes
@@ -3719,6 +3763,11 @@ configuration，所以它是工作区，不是 buffer 列表。~tab-bar-format~ 
 遍——后者会在每个 redisplay 周期里跑 ~telega-chats-list~ 这类重函数。三段都装在
 ~with-eval-after-load~ 里，相应包不在就不存在。
 
+telega 段另外收窄了成本：原实现每个未读事件都 ~(telega-chats-list)~ 后跑两次
+~telega-filter-chats~ 汇总 mention/reaction，TUI 下事件成串到达会与重绘竞争；现在只读
+~unread_unmuted_count~，并在缓存更新后显式 ~force-mode-line-update~（此前漏了，指示器会
+停在旧值）。上游可参考 #161（root buffer 更新拖慢 Emacs）与 #164（updateFile 已按进度节流）。
+
 第三层是 daemon 下的 workaround：新建帧与 ~window-setup~ 时手动重建一次 tab-bar 行
 （~tab-bar--update-tab-bar-lines~ 加 ~force-mode-line-update~），否则 client 帧会缺标签。
 
@@ -3789,19 +3838,17 @@ configuration，所以它是工作区，不是 buffer 列表。~tab-bar-format~ 
       "Update the cached Telega status in the tab bar."
       (when (and (featurep 'telega)
                  (telega-server-live-p))
+        ;; 只读 `unread_unmuted_count'，不再为每个未读事件遍历全部 chat
+        ;; 并跑两次 `telega-filter-chats'（上游 telega-core.el 的
+        ;; `telega-chats-list' 是 hash-table-values，O(N) 分配）。
         (setq +tab-bar-telega-indicator-cache
-              (let* ((chats (telega-chats-list))
-                     (online-p (funcall telega-online-status-function))
-                     (unread-count (or (plist-get telega--unread-chat-count :unread_unmuted_count) 0))
-                     (mention-count (apply #'+ (mapcar (telega--tl-prop :unread_mention_count)
-                                                       (telega-filter-chats chats '(and is-known mention)))))
-                     (reaction-count (apply #'+ (mapcar (telega--tl-prop :unread_reaction_count)
-                                                        (telega-filter-chats chats '(and is-known unread-reactions)))))
-                     (count (+ unread-count mention-count reaction-count))
+              (let* ((online-p (funcall telega-online-status-function))
+                     (count (or (plist-get telega--unread-chat-count :unread_unmuted_count) 0))
                      (text (propertize (concat " T" (unless (zerop count) (number-to-string count)) " ")
                                        'face `(:inherit font-lock-keyword-face :inverse-video ,online-p))))
                 `((tab-bar-telega menu-item ,text telega
-                                  :help "Open Telega"))))))
+                                  :help "Open Telega"))))
+        (force-mode-line-update t)))
 
     (add-hook! (telega-ready-hook
                 telega-chats-fetched-hook
@@ -4134,8 +4181,9 @@ UI 与 Orderless 的匹配。
 手。register 预览交给 consult（~register-preview-function~ 加上对 ~register-preview~ 的
 ~:override~ advice），xref 的定位列表也交给 consult（~xref-show-xrefs-function~ 与
 ~xref-show-definitions-function~），于是「找定义」与「找引用」共享同一个带预览的选择界面。
-~consult-customize~ 把预览键从默认的「任何键」收紧成 ~s-p~，主题那一条再叠 0.6 秒 debounce——切主
-题是有副作用的，预览不该每移一行就重载一次。
+~consult-customize~ 把预览键从默认的「任何键」收紧成 ~C-M-p~，主题那一条再叠 0.6 秒 debounce——切主
+题是有副作用的，预览不该每移一行就重载一次。不用原来的 ~s-p~：TUI 里终端不送 Super,Ghostty 默认也把
+~super+…~ 留给自己的快捷键；~C-M-p~ 在 ~macos-option-as-alt~ 下可用，minibuffer 里也没有别的绑定占着。
 
 最后是 ~+consult-source-fd~：一个自定义的 ~consult-buffer~ 源，用 ~fd~ 在当前项目根目录下列文件，
 ~:narrow ?f~ 给它一个窄化字符，~:category 'file~ 让它继承文件的补全与动作。代码注释里那句是关于
@@ -4189,10 +4237,10 @@ UI 与 Orderless 的匹配。
    consult-ripgrep consult-git-grep consult-grep
    consult-bookmark consult-recent-file
    consult-buffer
-   :preview-key "s-p")
+   :preview-key "C-M-p")
   (consult-customize
    consult-theme
-   :preview-key (list "s-p" :debounce 0.6 'any))
+   :preview-key (list "C-M-p" :debounce 0.6 'any))
 
   (defvar +consult-source-fd
     (list :name     "Find"
@@ -4283,7 +4331,9 @@ eshell、text，加 agent-shell 的两个 mode），不做全局；~eshell-mode~
 它被加进 ~corfu-continue-commands~，所以连按不会把弹出窗关掉。
 
 最后那组参数都偏离默认值：循环、自动弹（前缀 2 字符、延迟 0.2 秒）、预选第一个候选而不是「合法时
-才选」、选中时不预显当前候选。
+才选」、选中时不预显当前候选。~corfu-auto~ 是全局值，但 corfu 只在上面列出的 major mode 里开；
+README 提醒 capf 可能执行任意代码，这里接受该风险的理由写在那组参数的注释里——涉险面只有这些
+受信任的编程与配置文件 mode,外加 text-mode 的拼写类 capf。
 
 + 包名（MELPA）：~corfu~
 + Git 仓库：
@@ -4310,6 +4360,9 @@ eshell、text，加 agent-shell 的两个 mode），不做全局；~eshell-mode~
               ("RET" . nil))
   :config
   (setq corfu-cycle t
+        ;; corfu-mode is only enabled in the modes listed in the :hook
+        ;; above, so this global value never reaches a buffer whose capf
+        ;; is untrusted (README: capf may run arbitrary code).
         corfu-auto t
         corfu-auto-prefix 2
         corfu-preselect 'first
@@ -4671,7 +4724,9 @@ mu4e 附件、mailto 地址。除打开之外它还提供复制与批量打开�
 两条都关于「kill 之前先照顾已有的东西」。~kill-do-not-save-duplicates~ 让连续两次杀同一段文本只
 在 kill-ring 里留一份，比较用 ~equal-including-properties~，所以文本属性不同仍算两份；
 ~save-interprogram-paste-before-kill~ 在覆盖系统剪贴板之前，先把剪贴板内容收进 kill-ring，于是
-Emacs 的 kill 不会静默毁掉在别处复制的文本，之后仍能 ~C-y M-y~ 找回来。
+Emacs 的 kill 不会静默毁掉在别处复制的文本，之后仍能 ~C-y M-y~ 找回来。TTY 上这一步是 no-op：
+配置不列 ~getSelection~（见 =term/xterm= 一节），读系统剪贴板只会白等超时，所以 TUI 不读；
+GUI client 不受影响，仍照常合并。
 
 ~kill-ring-deindent-mode~ 是内置的全局次要模式：存进 kill-ring 的文本会按起始列向左去缩进。从深
 层缩进的代码里杀一行、粘到别处，不会带一串空格；需要保留原缩进时再手动调。
@@ -4759,6 +4814,7 @@ Emacs 的 kill 不会静默毁掉在别处复制的文本，之后仍能 ~C-y M-
   (define-minor-mode +auto-revert-mode
     "A lazy alternative to `global-auto-revert-mode'."
     :global t
+    :group 'editing
     (when global-auto-revert-mode
       (setq +auto-revert-mode nil))
     (let ((fn (if +auto-revert-mode #'add-hook #'remove-hook)))
@@ -7333,6 +7389,45 @@ Emacs 31 自带的 Markdown major mode，基于 tree-sitter（解析两个语法
                         :weight 'unspecified)))
 #+end_src
 
+*** The =init-emacs-writing.el= section for ~etaf-md~
+
+ETAF Markdown Preview：把本地 Markdown 文档在普通 buffer 里渲染成现代阅读视图——居中版心、
+标题层级、表格、callout、带语言标签和复制按钮的代码块、mermaid 图、KaTeX 公式、图片/视频卡片。
+编辑源文件时预览逐块刷新（~etaf-md-preview~ 分屏边写边看），页面本身只读。系统级的外部程序
+（mermaid-cli、ffmpeg、qrencode、Chrome）本机均已就绪，无需额外配置。
+
+上游只发源码，五个仓库全走 straight 的 GitHub recipe：本体 ~etaf-md~ 依赖 ECSS / Ebox /
+ETAF UI / ETAF 四个框架仓库，straight 的 recipe 不声明包间依赖，所以先显式装依赖再装本体。
+
++ 包名（GitHub emacs-taf）：~etaf-md~ 及其四个框架依赖
++ Git 仓库：
+  - GitHub：<https://github.com/emacs-taf/etaf-md>（README 与 docs/ 文档）
+
+#+begin_src emacs-lisp :tangle core/init-emacs-writing.el :mkdirp yes
+;; [etaf-md] Markdown reading view on ETAF/Ebox
+;; Straight resolves Package-Requires through the recipe cache, so a
+;; dependency later in the dolist is still "not found" when an earlier
+;; package pulls it in. Register all four recipes first, then build.
+(dolist (recipe '((ecss :type git :host github :repo "emacs-taf/ecss")
+                  (ebox :type git :host github :repo "emacs-taf/ebox")
+                  (etaf-ui :type git :host github :repo "emacs-taf/etaf-ui")
+                  (etaf :type git :host github :repo "emacs-taf/etaf")))
+  (straight-register-package recipe))
+(dolist (package '(ecss ebox etaf-ui etaf))
+  (straight-use-package package))
+
+(use-package etaf-md
+  ;; The renderer looks for scripts/mermaid-render.mjs under the built
+  ;; package directory, and straight flattens plain :files entries to the
+  ;; build root, so the prefixed sub-list keeps the scripts/ path.
+  :straight (:host github :repo "emacs-taf/etaf-md"
+                    :files (:defaults ("scripts" "scripts/mermaid-render.mjs")))
+  :commands (etaf-md-open etaf-md-preview)
+  :config
+  ;; 'auto: follow the active Emacs theme (also: dark / light / sepia)
+  (setq etaf-md-theme 'auto))
+#+end_src
+
 *** The =init-emacs-writing.el= section for ~md-babel~
 
 README：在 ~markdown-ts-mode~ 的围栏代码块里执行代码，做法是把块交给已经配好的 Org Babel——
@@ -7486,7 +7581,9 @@ refile、capture、agenda）在 ~init-emacs-agenda~。所以这里几乎全是�
 
 下面 10 个块，一块一个包：~org-persist~、~org~（最大的一块，181 行）、~org-element~、~ob-mermaid~、
 ~org-appear~、~org-fragtog~、~org-modern~、~ox~、~org-typst-preview~，最后是 ~provide~。
-~org~ 这一块自己带 ~:require-incrementally~ 的完整子文件清单，其余包都靠 ~:after org~ 排队。
+~org~ 这一块自己带 ~:require-incrementally~ 的子文件清单，其余包都靠 ~:after org~ 排队。
+清单对应的是当初的加载切分，不是 org 10.0-pre 的全部库：更新的库（~org-cdlatex~ 到
+~org-timestamp~ 这一段）由 ~org.el~ 自己急切 ~require~,不必也不该补进这份延迟清单。
 
 *** The =init-emacs-org.el= section for ~org-persist~
 
@@ -7538,15 +7635,12 @@ major mode，用纯文本」。本配置用的是 straight 从 =emacs-straight/o
 ~org-attach-use-inheritance t~（默认 ~selective~）、~org-num-skip-tags~（noexport/nonum 不编号）、
 ~org-imenu-depth 4~（默认 2）。
 
-链接与表格两段是这里仅有的逻辑之外的补充：~org-link-abbrev-alist~ 加了 7 条缩写
+链接这一段是这里仅有的逻辑之外的补充：~org-link-abbrev-alist~ 加了 7 条缩写
 （github/youtube/google/gmap/wiki/wolfram 与本地 ~org:~ 前缀）；~(setf (alist-get 'file
 org-link-frame-setup) #'find-file)~ 让 file 链接原地打开；~+org-file-link-face~ 给缺失的本地文件
 链接换成 warning 脸（远端路径与存在的文件仍用 ~org-link~），挂在 ~org-link-set-parameters~ 上；
 ~org-src-mode-map~ 里把 ~C-c C-c~ 绑成 ~org-edit-src-exit~（在源码块编辑 buffer 里直接收工）。
-表格那条 ~+org-realign-table-maybe-h~ 挂 ~post-command-hook~：Org 只在 ~org-table-next-field~ 与
-~org-table-next-row~ 里对齐，普通命令离开表格会留下参差的行；这个 hook 条件收得很紧（在表格里、
-且 ~org-table-may-need-update~），自己存恢复 point、静音 message，所以不会变成移动时的噪音。
-它的前身是 meow 退出 insert state 的钩子，meow 已不加载，注释说明的是历史而不是现状。
+（表格那条 post-command 自动重对齐 hook ~+org-realign-table-maybe-h~ 已于 2026-11-22 移除。）
 
 预览那条链值得单独读。现状是三个新名字：~org-latex-preview-cache 'persist~（默认已是 persist，
 这里用 ~setopt~ 写明）、~org-latex-preview-process-default 'dvisvgm~（默认按可执行文件探测，有
@@ -7579,7 +7673,7 @@ dvisvgm 时也是它）、~org-latex-preview-appearance-options~ 的 ~:scale 1.2
   :config
   ;; Org 10.0 dropped the old alias kept in the comments below; preview
   ;; caching is governed by `org-latex-preview-cache' instead.  Retired
-  ;; 2026-11-19, see dev-docs/notes/org-preview-cache-research-2026-11-19.md.
+  ;; 2026-11-19.
   (setopt org-latex-preview-cache 'persist)
   (setq
    ;; Keep generated LaTeX previews out of note directories.
@@ -7588,8 +7682,9 @@ dvisvgm 时也是它）、~org-latex-preview-appearance-options~ 的 ~:scale 1.2
    ;; org-preview-latex-image-directory (no-littering-expand-var-file-name "org/latex/")
    ;; Recognize a), A), a., and A. as list markers.
    org-list-allow-alphabetical t
-   ;; Always use shift to select
-   org-support-shift-select 'always
+   ;; Always use shift to select; 'everywhere is the modern name for the
+   ;; old 'always (ORG-NEWS: timestamps gained their own exception value).
+   org-support-shift-select 'everywhere
 
    ;; subscription: Use {} for sub- or super- scripts
    org-use-sub-superscripts '{}
@@ -7667,23 +7762,6 @@ dvisvgm 时也是它）、~org-latex-preview-appearance-options~ 的 ~:scale 1.2
 
   (define-key org-src-mode-map (kbd "C-c C-c") #'org-edit-src-exit)
 
-  ;; Realign after edits that never move to another field.  Org only
-  ;; realigns inside `org-table-next-field' and `org-table-next-row', so
-  ;; typing and then moving away with an ordinary command leaves the row
-  ;; ragged.  This used to run when leaving meow's insert state, and meow
-  ;; is not loaded.
-  (add-hook! post-command-hook
-    (defun +org-realign-table-maybe-h ()
-      "Realign the Org table at point when its contents changed."
-      (when (and (derived-mode-p 'org-mode)
-                 org-table-automatic-realign
-                 (org-at-table-p)
-                 org-table-may-need-update)
-        (let ((point (point))
-              (inhibit-message t))
-          (org-table-align)
-          (goto-char point)))))
-
   ;; Give custom blocks such as #+begin_question the usual block face.
   (defun +org-fontify-special-blocks (limit)
     "Add `org-block' to special block contents found before LIMIT."
@@ -7720,8 +7798,7 @@ dvisvgm 时也是它）、~org-latex-preview-appearance-options~ 的 ~:scale 1.2
   ;; Better Org Latex Preview
   ;; The two old names kept in the comments below are obsolete aliases
   ;; that org-compat.el marks for removal in Org 10.0.  Migrated to the
-  ;; new names 2026-11-19, see
-  ;; dev-docs/notes/plugin-update-final-recommendations-2026-11-19.md.
+  ;; new names 2026-11-19.
   ;; (setq org-preview-latex-default-process 'dvisvgm
   ;;       org-startup-with-latex-preview nil
   ;;       org-highlight-latex-and-related '(latex))
@@ -7851,9 +7928,13 @@ README.org：用 font-lock 与 text properties 给 Org buffer 上「现代样式
 都能单独开关（每个语法元素在 ~org-modern~ 自定义组里各有一项）。
 
 两个 hook 让它同时管 Org 与 Agenda：~org-mode~ 开 ~org-modern-mode~，~org-agenda-finalize~ 调
-~org-modern-agenda~，于是 agenda 的星号与标签样式与正文一致。样式上只改一处：
+~org-modern-agenda~，于是 agenda 的星号与标签样式与正文一致。样式上改两处：
 ~org-modern-star 'replace~（默认 ~fold~，即用折叠指示符替代星号）+ ~org-modern-replace-stars
-"◉○◈◇✳"~，于是层级靠字符区分，而不是靠「有没有折叠」这个状态。
+"◉○◈◇✳"~，于是层级靠字符区分，而不是靠「有没有折叠」这个状态；另一处是 ~org-modern-table nil~
+（2026-11-22）——关掉它对表格的美化（竖线/横线的像素替换与 padding），表格回到 Org 原生形态。
+注意时机：表格的 font-lock 规则在 buffer 启用 ~org-modern-mode~ 时才按变量值构建（源头
+~org-modern.el~ 的 ~(when org-modern-table ...)~），所以改完变量要重启 Emacs、或在旧 buffer 里
+把 mode 关开一次，已画上去的 text properties 才会被清掉。
 
 + 包名（MELPA）：~org-modern~
 + Git 仓库：
@@ -7868,7 +7949,9 @@ README.org：用 font-lock 与 text properties 给 Org buffer 上「现代样式
          (org-agenda-finalize . org-modern-agenda))
   :config
   (setq org-modern-star 'replace
-        org-modern-replace-stars "◉○◈◇✳"))
+        org-modern-replace-stars "◉○◈◇✳"
+        ;; Leave tables with Org's plain appearance (2026-11-22).
+        org-modern-table nil))
 #+end_src
 
 *** The =init-emacs-org.el= section for ~ox~
@@ -7894,6 +7977,22 @@ LaTeX 片段而不是丢掉）。
         org-html-validation-link nil
         org-latex-prefer-user-labels t
         org-export-with-latex t))
+#+end_src
+
+*** The =init-emacs-org.el= section for ~htmlize~
+
+HTML 导出的 src block 靠 ~htmlize~ 做语法着色：缺它时 org 只发一条
+~htmlize.el >= 1.34 required~ 警告，然后把代码块当纯文本导出——导出“成功”但没有任何字体化，
+正是那类静默降级。这里只声明包，装载由 ox 在需要时 ~require~。
+
++ 包名（MELPA）：~htmlize~
++ Git 仓库：
+  - GitHub：<https://github.com/emacsattic/htmlize>
+
+#+begin_src emacs-lisp :tangle core/init-emacs-org.el :mkdirp yes
+;; [htmlize] Syntax highlighting for exported HTML source blocks
+(use-package htmlize
+  :straight t)
 #+end_src
 
 *** The =init-emacs-org.el= section for ~org-typst-preview~
@@ -8654,8 +8753,9 @@ README：Magit 是用 Emacs Lisp 写的 Git 界面，目标是完整的 Git porc
 
 ~:config~ 里五个变量都是「关掉」：不画空白差异、不替用户保存仓库里所有 buffer（太魔幻）、commit
 buffer 不显示相关 ref（很少有用，只是拖慢）、diff 用 indicator faces、不标注行尾空白。
-~+magit-kill-buffers~ 换掉 ~magit-bury-buffer-function~：恢复窗口布局，并且在当前 buffer 确实是
-~magit-status-mode~ 时才遍历 magit buffer 去杀，其中还有进程在跑的退一步用 bury。
+~+magit-kill-buffers~ 换掉 ~magit-bury-buffer-function~：先记下当前 buffer 是否是
+~magit-status-mode~,再恢复窗口布局（恢复会切走 buffer,判断必须抢在前面），然后才遍历 magit
+buffer 去杀，其中还有进程在跑的退一步用 bury。
 最后一个函数是给下一个包用的开关：~+toggle-magit-difftastic~ 通过 ~transient-append-suffix~ 往
 magit 的 diff 菜单尾部加一个 "D"，而不是另起一个入口。
 
@@ -8688,11 +8788,20 @@ magit 的 diff 菜单尾部加一个 "D"，而不是另起一个入口。
 
   ;; Exterminate Magit buffers
   (defun +magit-kill-buffers (&rest _)
-    "Restore window configuration and kill all Magit buffers."
+    "Restore window configuration and kill all Magit buffers.
+The major-mode check has to run before restoring the window
+configuration: the restore switches to the previous buffer, so
+checking afterwards would test the wrong buffer and never kill."
     (interactive)
-    (magit-restore-window-configuration)
-    (let ((buffers (magit-mode-get-buffers)))
-      (when (eq major-mode 'magit-status-mode)
+    (let ((status-p (eq major-mode 'magit-status-mode))
+          buffers)
+      ;; `magit-mode-get-buffers' filters by the current buffer's
+      ;; `magit-toplevel', so collect the list before the restore
+      ;; switches buffers, for the same reason as the mode check.
+      (when status-p
+        (setq buffers (magit-mode-get-buffers)))
+      (magit-restore-window-configuration)
+      (when status-p
         (mapc (lambda (buf)
                 (with-current-buffer buf
                   (if (and magit-this-process
@@ -9284,7 +9393,7 @@ home-manager path that the symlink points at still has both."
 ~:config~ 里再调一次 ~+mu4e-apply~。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-mail.el :mkdirp yes
-(when-let ((dir (+mu4e-lisp-dir)))
+(when-let* ((dir (+mu4e-lisp-dir)))
   (add-to-list 'load-path dir))
 
 (cond
@@ -9341,7 +9450,8 @@ home-manager path that the symlink points at still has both."
   "Path of the private r/emacs Atom file produced by scripts/reddit-elfeed.py.")
 
 (defun +elfeed-file-feed (filename &rest tags)
-  "Build an Elfeed feed entry for local FILENAME under `+elfeed-local-dir' with TAGS."
+  "Build an Elfeed feed entry for local FILENAME under
+`+elfeed-local-dir' with TAGS."
   (cons (concat "file://" (expand-file-name filename +elfeed-local-dir)) tags))
 
 (defun +elfeed-hn-feed (&rest tags)
@@ -9508,13 +9618,21 @@ advice 共用 ~+elfeed--update-after-local-feeds~，只有第三个参数（要�
   ;; FN argument is a wrapper object, not eq to #'elfeed-update.
   (defun +elfeed--update-after-local-feeds (fn args run-hn)
     "Refresh local feeds asynchronously, then apply FN to ARGS.
-When RUN-HN is non-nil (or `+elfeed-hn-llm'), export ELFEED_HN_LLM=1."
-    (if (process-live-p (get-process "elfeed-local-feeds"))
-        (progn
-          (message "Local feed update is already running; updating remote feeds only")
-          (apply fn args))
+When RUN-HN is non-nil (or `+elfeed-hn-llm'), export ELFEED_HN_LLM=1.
+Without scripts/update-elfeed-feeds on disk (it is not tracked in
+this repo), fall straight through to the remote feed update instead
+of spawning a process that can only fail."
+    (let ((command (expand-file-name "scripts/update-elfeed-feeds"
+                                     user-emacs-directory)))
+      (cond
+       ((process-live-p (get-process "elfeed-local-feeds"))
+        (message "Local feed update is already running; updating remote feeds only")
+        (apply fn args))
+       ((not (file-executable-p command))
+        (message "Elfeed: %s is missing; updating remote feeds only" command)
+        (apply fn args))
+       (t
       (let ((process-environment (copy-sequence process-environment))
-            (command (expand-file-name "scripts/update-elfeed-feeds" user-emacs-directory))
             (token (condition-case err
                        (auth-source-pick-first-password :host "reddit-private-rss"
                                                         :port "rss")
@@ -9537,7 +9655,7 @@ When RUN-HN is non-nil (or `+elfeed-hn-llm'), export ELFEED_HN_LLM=1."
                             (message "Local feed update failed; see *elfeed-local-feeds*"))
                           ;; Atom may have appeared after a successful Reddit fetch.
                           (+elfeed-ensure-reddit-feed)
-                          (apply fn args)))))))
+                          (apply fn args)))))))))
 
   (defadvice! +elfeed-update-after-local-feeds-a (fn &rest args)
     :around #'elfeed-update
@@ -9698,14 +9816,32 @@ chat 的完整支持；核心成熟到可以日常聊天。
 赞助消息用 ~:override~ 的 advice 直接返回 nil，再在 ~telega-ready-hook~ 里关掉服务端开关；贴纸靠
 advice 临时把 ~telega-use-images~ 绑成 ~t~（全局是 ~nil~，否则图片会影响启动）；~telega-alert~ 的
 title/body 里带文本属性，macOS 通知不接受，所以用 ~:filter-args~ 剥掉。
+reaction 的心形不做 FE0F 转换：上游显示路径本就不处理，本地 advice 会绕过 ~telega-tl-str~
+的反代理，把补充平面 emoji 拆成两个代理字符；稳定优先，交回上游路径。
 ~+telega-completions-setup-capf~ 把每个 CAPF 包在「point 在输入区」的守卫里，否则补全会扫到只读的
 历史消息。哪些上游特性故意没抄也写在注释里：Matrix bridge（数据是私人的）、keyword 过滤、
 nerd-icons 图标。
 
 块首那行 ~;; -*- lexical-binding: t; -*-~ 要留着：它是文件中段的一行文件局部变量声明，Emacs 只认
 文件第一行与第二行的 cookie，所以这一行实际不生效——但它属于代码，删掉就是改代码。
-另外两处按平台分叉：=gnu/linux= 在 ~telega-before-auth-hook~ 里加一个本地 SOCKS5 代理，~darwin~ 下
-开 ~telega-alert-mode~。
+另外两处按平台分叉：~telega-before-auth-hook~ 里的本地 SOCKS5 代理按 =system-type= 选端口
+（=gnu/linux= 走 clash 的 7891，=darwin= 走 Surge 的 6153 —— macOS 直连 Telegram 会被墙，
+必须走代理），~darwin~ 下开 ~telega-alert-mode~。
+
+TUI 下的图片路径是本段最要紧的一处。~image-mode~ 在 ~display-images-p~ 为 nil 时直接
+~error "Display does not support images"~；telega 的 ~telega-photo--open~ 最终走
+~telega-image-view-file~ → ~telega-image-mode~（派生自 ~image-mode~），于是错误被事件分发
+的 ~condition-case-unless-debug~ 吞成 ~Error while processing cmd~。所以这里做两件事：
+给 ~telega-image-view-file~ 加 ~:around~ advice，非图形显示时改走 ~telega-open-file~；
+把 ~telega-open-file-function~ 换成 ~+telega-open-file~，TTY 下用 =open=/=xdg-open= 交给系统
+查看器（=org-open-file= 对未匹配扩展名会回落 ~find-file~，再进 ~image-mode~）。不改
+~telega-open-message-as-file~：GUI 下 photo 仍应走 ~telega-image-mode~ 的翻页浏览，advice 已覆盖
+TTY 分支。相关上游：#300（TTY 无图像时的占位符）、#491（emacs-nox 打开 chat 的 image-inserter
+报错）。空行宽度固定为 root 70 / chat 90：关掉上游 ~telega-chat-auto-fill-mode~ 与
+~telega-root-auto-fill-mode~ 的按窗口重算，否则 ~telega-chat-fill-column~ 会被窗口宽度覆盖；
+tab-bar 指示器只读 ~unread_unmuted_count~ 并显式 ~force-mode-line-update~。
+~telega-autoplay-mode~ 与 ~telega-notifications-mode~ 是 global minor mode，只 ~setq~ 变量
+不会装 hook，本段不再设置。
 
 + 包名（GitHub zevlg/telega.el）：~telega~
 + Git 仓库：
@@ -9750,16 +9886,6 @@ nerd-icons 图标。
            (filter (if archive-p (list telega-filter-default) '(archive))))
       (telega-filters-push filter)
       (message "telega filter: %s" (if archive-p telega-filter-default 'archive))))
-
-  (defun +telega-reaction-emoji (emoji)
-    "Return EMOJI, using the emoji presentation for a plain heart."
-    (if (equal emoji "❤") "❤️" emoji))
-
-  (defun +telega-reaction-title (title)
-    "Use the emoji presentation when TITLE starts with a plain heart."
-    (if (and (stringp title) (string-prefix-p "❤" title))
-        (concat "❤️" (substring title 1))
-      title))
 
   (defun +telega-alert--strip-text-properties (args)
     "Strip text properties from the notification spec in ARGS.
@@ -9857,13 +9983,15 @@ text properties are invalid."
   (setq telega-root-fill-column 70
         telega-chat-fill-column 90)
 
+  ;; 固定 70/90：关掉上游按窗口宽重算 fill-column 的 auto-fill minor mode，
+  ;; 否则 `telega-chat-fill-column' 会被 window-width - margin 覆盖。
+  (telega-root-auto-fill-mode -1)
+  (remove-hook 'telega-chat-mode-hook #'telega-chat-auto-fill-mode)
+
   (add-hook! telega-chat-mode-hook
     (defun +telega-disable-visual-fill-column-h ()
       "Disable visual fill column in Telega chat buffers."
       (visual-fill-column-mode -1)))
-
-  (telega-root-auto-fill-mode -1)
-  (remove-hook 'telega-chat-mode-hook #'telega-chat-auto-fill-mode)
 
   (setq telega-chat-show-avatars nil
         telega-user-show-avatars nil
@@ -9935,11 +10063,13 @@ text properties are invalid."
                           (apply-partially #'+telega-capf-in-input capf))
                         telega-completions-capf-functions)))
 
-  (when (eq system-type 'gnu/linux)
-    (add-hook! telega-before-auth-hook
-      (defun +telega-enable-linux-proxy-h ()
-        "Add and enable the local SOCKS5 proxy before Telega authorizes."
-        (telega--addProxy '(:server "127.0.0.1" :port 7891 :type (:@type "proxyTypeSocks5"))
+  (add-hook! telega-before-auth-hook
+    (defun +telega-enable-local-proxy-h ()
+      "Add and enable the local SOCKS5 proxy before Telega authorizes."
+      (let ((port (pcase system-type
+                    ('gnu/linux 7891)   ; clash
+                    ('darwin 6153))))   ; surge socks5
+        (telega--addProxy `(:server "127.0.0.1" :port ,port :type (:@type "proxyTypeSocks5"))
           :enable-p t
           :comment "Local SOCKS5 proxy"))))
 
@@ -9997,6 +10127,17 @@ text properties are invalid."
     :override #'telega-chatbuf-footer-ins-sponsored-messages
     nil)
 
+  ;; HACK: TUI 无图像能力时不要进 `image-mode`
+  ;; `image-mode' 在 `display-images-p' 为 nil 时直接报
+  ;; "Display does not support images"；非图形显示改走外部查看器，
+  ;; 覆盖 `telega-photo--open'、`telega-image-view-msg' 等全部调用方。
+  ;; 上游：#300、#491（TTY 无图像支持时的占位符/报错）。
+  (defadvice! +telega-image-view-file-tty-a (orig tl-file &optional for-msg)
+    :around #'telega-image-view-file
+    (if (display-images-p)
+        (funcall orig tl-file for-msg)
+      (telega-open-file (telega-file--path tl-file) for-msg)))
+
   (add-hook! telega-ready-hook
     (defun +telega-disable-sponsored-messages-h ()
       (telega--toggleHasSponsoredMessagesEnabled nil)))
@@ -10021,10 +10162,21 @@ text properties are invalid."
   ;; Lucius-style chat chrome.  His Matrix bridge, notification keyword
   ;; filter, and nerd-icons symbols are not copied: the bridge data is
   ;; personal, and nerd-icons is not part of this telega install.
+  ;; TUI 下 `org-open-file' 对普通图片会回落到 Emacs 内的 `find-file'，
+  ;; 再进 `image-mode' 同样报错；非图形显示直接交给系统查看器。
+  (defun +telega-open-file (file)
+    "Open FILE; on a TTY hand it to the OS viewer."
+    (if (display-graphic-p)
+        (org-open-file file)
+      (pcase system-type
+        ('darwin (call-process "open" nil 0 nil file))
+        ('gnu/linux (call-process "xdg-open" nil 0 nil file))
+        (_ (find-file file)))))
   (keymap-global-set "C-c t" telega-prefix-map)
-  (setq telega-autoplay-mode t
-        telega-notifications-mode t
-        telega-open-file-function #'org-open-file
+  ;; `telega-autoplay-mode'/`telega-notifications-mode' 是 global minor
+  ;; mode：只 `setq' 变量不会安装 hook（上游 telega-modes.el /
+  ;; telega-notifications.el），TUI 下也不需要，故不再设置。
+  (setq telega-open-file-function #'+telega-open-file
         telega-sticker-size '(6 . 24)
         telega-symbol-mark (propertize " " 'face 'telega-button-highlight)
         telega-msg-save-dir "~/Downloads"
@@ -10056,13 +10208,6 @@ text properties are invalid."
   (add-hook 'enable-theme-functions #'+telega-redraw-for-theme)
   (add-hook 'telega-msg-ignore-predicates
             (telega-match-gen-predicate 'msg '(sender is-blocked)))
-  (advice-add 'telega-ins--msg-reaction-type :around
-              (lambda (fn rt)
-                (if (eq (intern (plist-get rt :@type)) 'reactionTypeEmoji)
-                    (telega-ins (+telega-reaction-emoji (plist-get rt :emoji)))
-                  (funcall fn rt))))
-  (advice-add 'telega-msg-reaction-title-for-completion :filter-return
-              #'+telega-reaction-title)
   (require 'telega-mnz)
   (global-telega-mnz-mode 1)
   (when (eq system-type 'darwin)
@@ -10225,7 +10370,8 @@ iconv -f UTF-16LE~ 把值从 UTF-16LE blob 里解出来，读不到就退回 ~gp
 搜索、抓 URL 与读本地文件外都需要确认，也可以把任务委派给不共享上下文的 sub-agent。
 
 本配置只调一次 ~gptel-agent-update~：tools 的注册归它自己管，这里不逐个开关工具，也不放宽上面那层
-确认默认值。
+确认默认值——~gptel-confirm-tool-calls~ 显式写成上游默认的 ~'auto~,让写文件、执行 bash 这类调用
+照常弹确认，而不是靠省略去猜默认值。（曾写成 ~nil~,等于全局静音确认，与这段叙述相反。）
 
 + 包名（MELPA）：~gptel~
 + 包名（MELPA）：~gptel-agent~
@@ -10241,7 +10387,8 @@ iconv -f UTF-16LE~ 把值从 UTF-16LE blob 里解出来，读不到就退回 ~gp
   :init
   (setq gptel-model 'auto/deepseek-flash
         gptel-default-mode 'org-mode
-        gptel-confirm-tool-calls nil)
+        ;; Upstream default: writing files and running bash still prompt.
+        gptel-confirm-tool-calls 'auto)
   ;; Pi reads Magpie's menu-bar picker from WebKit local storage.
   ;; `auto' is not that choice: it is WorkBuddy's own model id and
   ;; always resolves there.  Defined in :init so agent-shell can read
@@ -10379,8 +10526,7 @@ reasoning 与 tool 的 chunk 是 cons 而不是 ~nil~，直接忽略——只有
          ("C-c g d" . +gptel-quick-dict))
   :preface
   ;; [render] Local addition: stream responses into a reusable side-window
-  ;; buffer instead of the fork's posframe popup (see
-  ;; dev-docs/notes/gptel-render-non-popup-requirements-2026-02-11.md).
+  ;; buffer instead of the fork's posframe popup.
   (defvar +gptel-quick-render-function 'buffer
     "Where `+gptel-quick-region-or-buffer' renders results.
 `buffer' streams the response into a reusable \"*gptel-quick:
