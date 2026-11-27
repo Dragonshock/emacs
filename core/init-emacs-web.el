@@ -1,21 +1,16 @@
 ;;; -*- lexical-binding: t -*-
 
 (defvar +elfeed-local-dir (no-littering-expand-var-file-name "rss/")
-  "Directory for local Atom feeds (HN, Reddit, …) under no-littering `var/rss/'.")
+  "Directory for local Atom feeds under no-littering `var/rss/'.")
 
 (defvar +elfeed-hn-atom
   (expand-file-name "hackernews.atom" +elfeed-local-dir)
   "Path of the HN Atom file written by scripts/hn-elfeed.py.")
 
-(defvar +elfeed-reddit-atom
-  (expand-file-name "reddit-emacs.atom" +elfeed-local-dir)
-  "Path of the private r/emacs Atom file produced by scripts/reddit-elfeed.py.")
-
 (defun +elfeed-file-feed (filename &rest tags)
   "Build an Elfeed feed entry for local FILENAME under
 `+elfeed-local-dir' with TAGS."
   (cons (concat "file://" (expand-file-name filename +elfeed-local-dir)) tags))
-
 (defun +elfeed-hn-feed (&rest tags)
   "Build the Hacker News file:// feed entry with TAGS (default hackernews)."
   (cons (concat "file://" +elfeed-hn-atom) (or tags '(hackernews))))
@@ -66,18 +61,6 @@
               (string-match-p +elfeed-pr-signal-regexp title)
               (not (string-match-p +elfeed-pr-exclude-regexp title))))))
 
-(defun +elfeed-ensure-reddit-feed ()
-  "Register the Reddit local feed when its atom file is readable.
-Safe to call repeatedly; does not duplicate entries."
-  (when (file-readable-p +elfeed-reddit-atom)
-    (let* ((entry (+elfeed-file-feed "reddit-emacs.atom" 'r/emacs))
-           (url (car entry))
-           (known (seq-some (lambda (feed)
-                              (equal url (+elfeed-feed-url feed)))
-                            elfeed-feeds)))
-      (unless known
-        (setq elfeed-feeds (append elfeed-feeds (list entry)))))))
-
 (defun +elfeed-show-window ()
   "Return a live window already showing an Elfeed entry, or nil."
   (cl-find-if (lambda (window)
@@ -116,8 +99,6 @@ Shell gate remains ELFEED_HN_LLM (see scripts/update-elfeed-feeds).")
 (use-package elfeed
   :straight t
   :init
-  (require 'auth-source)
-
   ;; Local generators rewrite Atom files, then the original update fetches
   ;; file:// + remote feeds.  All local atoms live under var/rss/ (no-littering).
   ;; Interactive update always enables HN; background never calls Magpie unattended.
@@ -139,25 +120,7 @@ of spawning a process that can only fail."
         (message "Elfeed: %s is missing; updating remote feeds only" command)
         (apply fn args))
        (t
-      (let ((process-environment (copy-sequence process-environment))
-            (cred (condition-case err
-                      (car (auth-source-search :host "reddit-private-rss"
-                                               :port "rss" :max 1))
-                    (error
-                     (message "Elfeed: cannot read Reddit RSS token (%s); skipping private feed"
-                              (error-message-string err))
-                     nil))))
-        ;; The private RSS URL is `?feed=TOKEN&user=NAME'; the token alone is not
-        ;; enough.  The generator falls back to a hard-coded username, so pass the
-        ;; authinfo `login' too — otherwise the pair mismatches and Reddit 404s.
-        (when cred
-          (let ((token (plist-get cred :secret))
-                (user (plist-get cred :user)))
-            (when (functionp token) (setq token (funcall token)))
-            (when (and (stringp token) (not (string-empty-p token)))
-              (setenv "REDDIT_PRIVATE_RSS_TOKEN" token))
-            (when (and (stringp user) (not (string-empty-p user)))
-              (setenv "REDDIT_PRIVATE_RSS_USER" user))))
+      (let ((process-environment (copy-sequence process-environment)))
         (when (or run-hn +elfeed-hn-llm)
           (setenv "ELFEED_HN_LLM" "1"))
         (make-process :name "elfeed-local-feeds"
@@ -169,8 +132,6 @@ of spawning a process that can only fail."
                         (unless (process-live-p process)
                           (unless (zerop (process-exit-status process))
                             (message "Local feed update failed; see *elfeed-local-feeds*"))
-                          ;; Atom may have appeared after a successful Reddit fetch.
-                          (+elfeed-ensure-reddit-feed)
                           (apply fn args)))))))))
 
   (defadvice! +elfeed-update-after-local-feeds-a (fn &rest args)
@@ -214,7 +175,6 @@ of spawning a process that can only fail."
                       '("https://emacsredux.com/atom.xml" redux)
                       '("https://egh0bww1.com/rss.xml" includeyy)
                       '("https://www.rahuljuliato.com/rss.xml" rahul)
-                      ;; r/emacs file feed only if atom exists (see +elfeed-ensure-reddit-feed)
                       ;; programming
                       '("https://matklad.github.io/feed.xml" matklad)
                       '("https://rust-analyzer.github.io/feed.xml" rust-analyzer)
@@ -311,7 +271,6 @@ of spawning a process that can only fail."
   (add-hook 'elfeed-new-entry-hook #'+elfeed-tag-promo-entry)
   (add-hook 'elfeed-new-entry-hook #'+elfeed-dedup-ithome-entry)
 
-  (+elfeed-ensure-reddit-feed)
   (make-directory elfeed-enclosure-default-dir t)
 
   ;; Exclude db + enclosure trees from recentf (predicate: path-safe).
