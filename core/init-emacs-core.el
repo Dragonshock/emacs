@@ -227,9 +227,6 @@
               (when savehist-mode
                 (setopt savehist-autosave-interval 1000))))
 
-  (with-eval-after-load 'vertico
-    (add-to-list 'savehist-additional-variables 'vertico-repeat-history))
-
   (defvar dogears-list nil)
   (defun +dogears--record-for-savehist (record)
     (cons (substring-no-properties (car record))
@@ -646,19 +643,23 @@ If no project is found, create a temporary Eshell instance in the current direct
   :hook ((eshell-mode . +eshell-setup-esh-help-eldoc)
          (eshell-mode . eldoc-mode))
   :config
-  (defadvice! +eshell-esh-help-eldoc-man-minibuffer-string-a (cmd)
-    :override #'esh-help-eldoc-man-minibuffer-string
-    (if-let* ((cache-result (gethash cmd esh-help-man-cache)))
-        (unless (eql 'none cache-result)
-          cache-result)
-      (let ((str (split-string (esh-help-man-string cmd) "\n")))
-        (if (equal (concat "No manual entry for " cmd) (car str))
-            (ignore (puthash cmd 'none esh-help-man-cache))
-          (puthash
-           cmd (when-let* ((str (seq-drop-while (lambda (s) (not (string-match-p "^SYNOPSIS$" s))) str))
-                           (str (nth 1 str)))
-                 (substring str (string-match-p "[^\s\t]" str)))
-           esh-help-man-cache))))))
+  ;; HACK: upstream already caches (`esh-help-man-cache') the
+  ;;   "No manual entry for …" → `none' marking and the SYNOPSIS scraping, so
+  ;;   this advice no longer copies that logic: it only keeps the cache
+  ;;   pre-check in front (avoid respawning `man') and delegates the
+  ;;   formatting to upstream. As `:around', an upstream rename/signature
+  ;;   change errors out instead of silently dropping eldoc.
+  (defadvice! +eshell-esh-help-eldoc-man-minibuffer-string-a (fn cmd)
+    :around #'esh-help-eldoc-man-minibuffer-string
+    (if-let* ((cached (gethash cmd esh-help-man-cache)))
+        (unless (eql 'none cached) cached)
+      ;; Upstream calls `string-match' on the line after SYNOPSIS without
+      ;;   checking it exists, so a page with no SYNOPSIS section would signal;
+      ;;   the old local copy returned nil there. Keep that.
+      (let ((res (condition-case nil (funcall fn cmd)
+                   (wrong-type-argument nil))))
+        (puthash cmd (or res 'none) esh-help-man-cache)
+        res))))
 
 ;; [esh-tldr] Browse local tldr pages
 (use-package esh-tldr
@@ -676,12 +677,15 @@ If no project is found, create a temporary Eshell instance in the current direct
   ;; HACK: `pcomplete-completions' returns a function, but
   ;;   `eshell-did-you-mean--get-all-commands' unconditionally expects it to
   ;;   return a list of strings, causing wrong-type-arg errors in many cases.
-  ;;   `all-completions' handles all these cases.
-  (defadvice! +eshell--fix-eshell-did-you-mean-a (&rest _)
-    :override #'eshell-did-you-mean--get-all-commands
+  ;;   `all-completions' handles all these cases. Kept as `:around': fill the
+  ;;   variable here, then let upstream run (its own `unless' makes that a
+  ;;   no-op once filled) so an upstream rename/signature change errors out.
+  (defadvice! +eshell--fix-eshell-did-you-mean-a (fn &rest args)
+    :around #'eshell-did-you-mean--get-all-commands
     (unless eshell-did-you-mean--all-commands
       (setq eshell-did-you-mean--all-commands
-            (all-completions "" (pcomplete-completions))))))
+            (all-completions "" (pcomplete-completions))))
+    (apply fn args)))
 
 (use-package ghostel
   :straight t
@@ -743,27 +747,12 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 ;; [xterm]
 (use-package term/xterm
   :init
-  (setq xterm-extra-capabilities '(modifyOtherKeys reportBackground setSelection)
+  (setq xterm-extra-capabilities '(modifyOtherKeys setSelection)
         ;; herdr 不转发 OSC 10/11 查询的回包（2026-11-25 实测：查询字符被原样
         ;; 打到屏幕上、没有应答）。终端初始化时每个同步查询都会白等满
         ;; `xterm-query-timeout'，默认 2 秒让 `emacsclient -t' 的 attach 多等
         ;; 约 4 秒。0.2 秒足够接住正常终端的回包，也把无回包场景压到可忽略。
-        xterm-query-timeout 0.2)
-
-  (defun +xterm-report-background ()
-    "Query the terminal background color and reload the matching theme."
-    (interactive)
-    (unless (display-graphic-p)
-      (require 'term/xterm)
-      (xterm--query "\e]11;?\e\\"
-                    '(("\e]11;" . xterm--report-background-handler))
-                    t)
-      (let ((bg-color (terminal-parameter nil 'xterm--background-color)))
-        (when bg-color
-          (apply #'xterm--set-background-mode bg-color)))
-      (+load-theme)
-      (message "Reported terminal background as %s"
-               (terminal-parameter nil 'background-mode)))))
+        xterm-query-timeout 0.2))
 
 ;; [which-key] Discover key bindings as you type
 (use-package which-key

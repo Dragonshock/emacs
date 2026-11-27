@@ -12,7 +12,8 @@
 /rime/
 
 # Package and native build artifacts
-/straight/
+/straight/*
+!/straight/versions/
 /eln-cache/
 /elpa/
 *.elc
@@ -32,7 +33,16 @@ __pycache__/
 /AGENTS.md
 /dev-docs/
 /scripts/update-gnus-sources
+# Elfeed local-feed generators: machine-private (no secrets in repo, but they
+# encode this machine's feed setup).  Config tolerates their absence; recover
+# from commit 557ed0c if moving to a new machine.
+/scripts/update-elfeed-feeds
+/scripts/hn-elfeed.py
+/scripts/reddit-elfeed.py
 /tree-sitter
 
 # Reference checkouts from the config merge (each has its own .git)
 /code-root/
+
+# One-off export/test artifacts
+/test-b4.html

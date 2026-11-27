@@ -208,10 +208,12 @@
 ;; [scrollview] Show scroll progress in the fringe
 (use-package scrollview
   :straight (:type git :host github :repo "roife/scrollview.el" :branch "main")
-  :hook ((after-init . global-scrollview-mode))
+  ;; Disabled 2026-11-28: keep the declaration, re-enable by uncommenting.
+  ;; :hook ((after-init . global-scrollview-mode))
   :config
-  (setq scrollview-refresh-delay 0.1
-        scrollview-update-interval 0.01))
+  ;; TTY: no margin scrollbar (margin redraws flicker on terminals and steal a
+  ;; column from two-column UIs like telega).  GUI fringe unaffected.
+  (setq scrollview-fallback-to-margin nil))
 
 (setq frame-title-format
       '((:eval (or buffer-file-truename "%b"))))

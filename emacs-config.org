@@ -28,10 +28,10 @@
 
 ** 运行环境
 
-- macOS：~init-emacs-platform~ 里的 macOS 分支处理外观轮询与 ~s-~ 修饰键；=early-init.el= 里对
+- macOS：~init-emacs-platform~ 里的 macOS 分支只管 ~s-~ 快捷键；=early-init.el= 里对
   ~ns-transparent-titlebar~ 的处理也只在 ~(featurep 'ns)~ 时生效。
-- Linux：~init-emacs-platform~ 里走 XDG Settings portal 的 ~color-scheme~，=early-init.el= 里
-  清掉 ~command-line-ns-option-alist~。
+- Linux：平台模块在 Linux 上空加载（外观跟随已随固定主题决定删除；2026-11-27 macOS-only
+  简化后，=early-init.el= 不再清 ~command-line-ns-option-alist~）。
 
 两条路径共享同一套模块，平台差异集中在 ~init-emacs-platform~ 一个文件里，别的模块不写
 ~system-type~ 判断。
@@ -244,8 +244,9 @@ prot 的 =early-init.el= 长在多桌面环境（bspwm/i3/GNOME）与两种 Emac
 上升）。~load-prefer-newer~ 在 batch（~noninteractive~）时为 t，这样脚本会读到比 =.elc= 更新的源
 文件，而不是被旧字节码骗过去。
 
-~auto-mode-case-fold~ 关掉，省掉每个文件名的两次大小写匹配。~command-line-*-option-alist~ 按
-frame 类型清空——在 macOS 上不需要解析 X11 的选项表，反过来也一样。
+~auto-mode-case-fold~ 关掉，省掉每个文件名的两次大小写匹配。~command-line-x-option-alist~ 在
+非 X11/pgtk frame 下清空——macOS 上不需要解析 X11 的选项表。ns 选项表则不再反向清空
+（2026-11-27 macOS-only 简化后，那条分支永远不会执行，已删除）。
 
 ~setopt--set~ 的 ~:around~ advice 把 ~custom-load-recursion~ 打开，防止 ~setopt~ 在 init 期间
 为了类型检查提前加载 ~custom~ 依赖。
@@ -261,8 +262,6 @@ frame 类型清空——在 macOS 上不需要解析 X11 的选项表，反过�
 (setq auto-mode-case-fold nil)
 
 ;; Avoid processing command-line option tables irrelevant to this frame type.
-(unless (eq system-type 'darwin)
-  (setq command-line-ns-option-alist nil))
 (unless (memq initial-window-system '(x pgtk))
   (setq command-line-x-option-alist nil))
 
@@ -281,8 +280,8 @@ frame 类型清空——在 macOS 上不需要解析 X11 的选项表，反过�
 了旧值并在恢复时 ~delete-dups~，避免重复条目累积。
 
 同一节里把 ~vc-handled-backends~ 先置 nil（VC 后端探测留到 ~init-emacs-vcs~），再把
-~load-suffixes~ 与 ~load-file-rep-suffixes~ 裁剪到最小；~before-init-hook~ 里按平台补回
-~.dylib~ / ~.so~ / ~.dll~，否则动态模块加载会失败。
+~load-suffixes~ 与 ~load-file-rep-suffixes~ 裁剪到最小；~before-init-hook~ 里补回
+~.dylib~（2026-11-27 macOS-only 简化，不再按平台分叉 ~.so~ / ~.dll~），否则动态模块加载会失败。
 
 #+begin_src emacs-lisp :tangle early-init.el
 ;; `file-name-handler-alist' is consulted on each call to `require', `load', or
@@ -314,11 +313,7 @@ frame 类型清空——在 macOS 上不需要解析 X11 的选项表，反过�
 
 (defun +restore-load-suffixes-h ()
   "Restore dynamic module suffixes before loading the init file."
-  (setq load-suffixes `(".elc" ".el"
-                        ,(cond ((eq system-type 'darwin) ".dylib")
-                               ((eq system-type 'gnu/linux) ".so")
-                               ((eq system-type 'windows-nt) ".dll")
-                               (t nil)))))
+  (setq load-suffixes '(".elc" ".el" ".dylib")))
 
 (add-hook 'before-init-hook #'+restore-load-suffixes-h 100)
 #+end_src
@@ -421,8 +416,9 @@ t，之后恢复并 ~redraw-frame~（daemon 下跳过）——这一段专治深
 
 - ~init-emacs-util~ 必须最先：~add-hook!~ 与 ~defadvice!~ 是后面所有模块的语法基础。
 - ~init-emacs-straight~ 必须早于任何 ~:straight~ 声明，它负责 bootstrap。
-- ~init-emacs-theme~ 必须早于 ~init-emacs-platform~：平台层在加载时就会调用
-  ~+system-appearance-changed~，而 ~+load-theme~ 定义在 theme 层。
+- ~init-emacs-theme~ 保持排在 ~init-emacs-platform~ 之前：这是历史依赖边的遗留顺序（平台层曾在加
+  载时调用 ~+system-appearance-changed~）。2026-11-27 固定主题后平台层已不再触发主题回调，这条边
+  不再是硬约束，但顺序保留不动。
 - ~init-emacs-edit~ 必须早于 ~init-emacs-prog~：~C-c r~ 前缀键的归属在 edit 里确定，prog 往里补子键。
 - ~init-emacs-ime~ 紧随 ~init-emacs-core~：它拥有 ~default-input-method~（core 只留了一条 NOTE），
   并在任何一次 liberime 构建之前跑掉 ~+liberime-setup-build-env~。
@@ -443,9 +439,9 @@ t，之后恢复并 ~redraw-frame~（daemon 下跳过）——这一段专治深
 
 *** Appearance
 
-- ~init-emacs-theme~ —— 主题选择与明暗跟随，平台层与主题层之间的唯一接口。
+- ~init-emacs-theme~ —— 固定亮色主题 ~ashen-day~（GUI 与 TUI 都是），不跟随系统明暗。
 - ~init-emacs-ui~ —— 窗口装饰、行号、边框等视觉细节。
-- ~init-emacs-platform~ —— macOS 特化：外观变化、修饰键、外部应用联动。
+- ~init-emacs-platform~ —— macOS 特化：~s-~ 快捷键（外观跟随已随固定主题决定删除）。
 - ~init-emacs-highlight~ —— 高亮类小包的取舍（被注释掉的那些是否决，不是待办）。
 - ~init-emacs-modeline~ —— 模式行。
 
@@ -485,8 +481,11 @@ t，之后恢复并 ~redraw-frame~（daemon 下跳过）——这一段专治深
 ;; Each entry maps to one `core/init-*.el', tangled from `emacs-config.org'.
 ;; The order IS the dependency order:
 ;;   init-emacs-util  first: every other module uses its `add-hook!' / `defadvice!'
-;;   init-emacs-theme before init-emacs-platform: the platform files call
-;;              `+system-appearance-changed' at load time.
+;;   init-emacs-theme before init-emacs-platform: historical leftover; the
+;;              platform files used to call `+system-appearance-changed' at load
+;;              time.  Since the fixed theme (2026-11-27) they no longer
+;;              trigger theme callbacks, so this edge is no longer a hard
+;;              constraint, but the order is kept.
 ;;   init-emacs-ime   right after core: it owns `default-input-method' and runs
 ;;              `+liberime-setup-build-env' before any liberime build.
 
@@ -1120,7 +1119,8 @@ File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这�
 ~savehist-additional-variables~ 点名。
 
 这里点名的有 ~kill-ring~、两个 search ring、~global-mark-ring~，以及 ~dogears-list~（另一个包的
-状态）；~vertico-repeat-history~ 要等 vertico 加载后才存在，所以用 ~with-eval-after-load~ 追加。
+状态）；~vertico-repeat-history~ 不用手动点名——vertico v2.1 起 ~vertico-repeat.el~ 加载时会自动
+把它注册进 ~savehist-additional-variables~，原先的 ~with-eval-after-load~ 追加已删除。
 ~+savehist-clean-values-a~ 在保存前统一去掉文本属性：kill-ring 里带属性的字符串会显著撑大历史文
 件。
 
@@ -1144,9 +1144,6 @@ File 菜单里的子项、以及列出成 buffer 的 ~recentf-open-files~（这�
             (defun +savehist-set-autosave-interval-h ()
               (when savehist-mode
                 (setopt savehist-autosave-interval 1000))))
-
-  (with-eval-after-load 'vertico
-    (add-to-list 'savehist-additional-variables 'vertico-repeat-history))
 
   (defvar dogears-list nil)
   (defun +dogears--record-for-savehist (record)
@@ -1796,8 +1793,11 @@ README 一句话讲完：用 Corfu 与 ~corfu-candidate-overlay~ 给 Eshell 做 
 
 本配置把这两步换成更细的接法：~+eshell-setup-esh-help-eldoc~ 显式设置
 ~eldoc-documentation-function~（比 ~setup-esh-help-eldoc~ 好控制），和 ~eldoc-mode~ 一起挂到
-~eshell-mode~ 上。~:config~ 里那条 ~:override~ advice 把上游的 man 摘录函数整段换成一个带缓存的
-版本：命中 ~esh-help-man-cache~ 直接返回，未命中才解析 ~SYNOPSIS~ 段并写回缓存。
+~eshell-mode~ 上。~:config~ 里那条 advice 是 ~:around~ 的：命中 ~esh-help-man-cache~ 直接返回，未命中
+才调上游（上游自己就做「~No manual entry for~ → ~none~」标记与 ~SYNOPSIS~ 段抽取，并写回缓存），
+结果再回填缓存。上游那份带缓存的实现早已存在，本地不再复制一遍解析逻辑——上游若改名或改签名，
+这里会直接报错，而不是静默把 eldoc 丢掉。本地只剩一条防护：没有 ~SYNOPSIS~ 段的手册页上游会直接
+signal（对 ~nil~ 调 ~string-match~），旧的本地副本那时返回 ~nil~，所以这里把这种情形还原成 ~nil~。
 
 + 包名（MELPA）：~esh-help~
 + Git 仓库：
@@ -1814,19 +1814,23 @@ README 一句话讲完：用 Corfu 与 ~corfu-candidate-overlay~ 给 Eshell 做 
   :hook ((eshell-mode . +eshell-setup-esh-help-eldoc)
          (eshell-mode . eldoc-mode))
   :config
-  (defadvice! +eshell-esh-help-eldoc-man-minibuffer-string-a (cmd)
-    :override #'esh-help-eldoc-man-minibuffer-string
-    (if-let* ((cache-result (gethash cmd esh-help-man-cache)))
-        (unless (eql 'none cache-result)
-          cache-result)
-      (let ((str (split-string (esh-help-man-string cmd) "\n")))
-        (if (equal (concat "No manual entry for " cmd) (car str))
-            (ignore (puthash cmd 'none esh-help-man-cache))
-          (puthash
-           cmd (when-let* ((str (seq-drop-while (lambda (s) (not (string-match-p "^SYNOPSIS$" s))) str))
-                           (str (nth 1 str)))
-                 (substring str (string-match-p "[^\s\t]" str)))
-           esh-help-man-cache))))))
+  ;; HACK: upstream already caches (`esh-help-man-cache') the
+  ;;   "No manual entry for …" → `none' marking and the SYNOPSIS scraping, so
+  ;;   this advice no longer copies that logic: it only keeps the cache
+  ;;   pre-check in front (avoid respawning `man') and delegates the
+  ;;   formatting to upstream. As `:around', an upstream rename/signature
+  ;;   change errors out instead of silently dropping eldoc.
+  (defadvice! +eshell-esh-help-eldoc-man-minibuffer-string-a (fn cmd)
+    :around #'esh-help-eldoc-man-minibuffer-string
+    (if-let* ((cached (gethash cmd esh-help-man-cache)))
+        (unless (eql 'none cached) cached)
+      ;; Upstream calls `string-match' on the line after SYNOPSIS without
+      ;;   checking it exists, so a page with no SYNOPSIS section would signal;
+      ;;   the old local copy returned nil there. Keep that.
+      (let ((res (condition-case nil (funcall fn cmd)
+                   (wrong-type-argument nil))))
+        (puthash cmd (or res 'none) esh-help-man-cache)
+        res))))
 #+end_src
 
 *** The =init-emacs-core.el= section for ~esh-tldr~
@@ -1858,9 +1862,10 @@ buffer、~shell-mode~、~comint-mode~ 与 ~eshell-mode~，从不执行示例命�
 ~eshell-did-you-mean~ 在 Eshell 里补上「命令找不到时猜你本来想输什么」的提示，启用方式就是调一次
 ~eshell-did-you-mean-setup~。
 
-~:init~ 里先 setup，~:after esh-mode~ 保证时机。那条 ~:override~ advice 修的是上游的类型假设问
+~:init~ 里先 setup，~:after esh-mode~ 保证时机。那条 ~:around~ advice 修的是上游的类型假设问
 题：注释里写明 ~pcomplete-completions~ 返回的是函数，而上游无条件当列表用，于是很多情况下直接
-wrong-type-arg；改成 ~all-completions~ 两种情形都能处理。
+wrong-type-arg；改成 ~all-completions~ 两种情形都能处理。填充完再调上游：上游自己带 ~unless~
+短路，已填好时只是空转；上游若改名或改签名，这里会报错而不是静默失效。
 
 + 包名（MELPA）：~eshell-did-you-mean~
 + Git 仓库：
@@ -1874,12 +1879,15 @@ wrong-type-arg；改成 ~all-completions~ 两种情形都能处理。
   ;; HACK: `pcomplete-completions' returns a function, but
   ;;   `eshell-did-you-mean--get-all-commands' unconditionally expects it to
   ;;   return a list of strings, causing wrong-type-arg errors in many cases.
-  ;;   `all-completions' handles all these cases.
-  (defadvice! +eshell--fix-eshell-did-you-mean-a (&rest _)
-    :override #'eshell-did-you-mean--get-all-commands
+  ;;   `all-completions' handles all these cases. Kept as `:around': fill the
+  ;;   variable here, then let upstream run (its own `unless' makes that a
+  ;;   no-op once filled) so an upstream rename/signature change errors out.
+  (defadvice! +eshell--fix-eshell-did-you-mean-a (fn &rest args)
+    :around #'eshell-did-you-mean--get-all-commands
     (unless eshell-did-you-mean--all-commands
       (setq eshell-did-you-mean--all-commands
-            (all-completions "" (pcomplete-completions))))))
+            (all-completions "" (pcomplete-completions))))
+    (apply fn args)))
 #+end_src
 
 *** The =init-emacs-core.el= section for ~ghostel~ and ~ghostel-eshell~
@@ -1983,11 +1991,11 @@ Like normal Emacs `C-k'.  Kill to end of line and put content in kill-ring."
 
 *** The =init-emacs-core.el= section for =term/xterm=
 
-=term/xterm= 是内置库，负责在 xterm 兼容终端里多问几个能力查询（extra capabilities），包括
-~modifyOtherKeys~、~reportBackground~、~getSelection~ / ~setSelection~。
+=term/xterm= 是内置库，负责在 xterm 兼容终端里多问几个能力查询（extra capabilities）；库本身
+支持 ~modifyOtherKeys~、~reportBackground~、~getSelection~ / ~setSelection~ 等，本配置启用
+哪些见下（~reportBackground~ 已于 2026-11-27 随固定主题移除）。
 
-~xterm-extra-capabilities~ 只显式列出 =modifyOtherKeys=、=reportBackground= 和
-=setSelection=，不去猜终端。
+~xterm-extra-capabilities~ 只显式列出 =modifyOtherKeys= 和 =setSelection=，不去猜终端。
 
 ~xterm-set-window-title~ 与 ~xterm-mouse-mode~ 于 2026-11-25 移除（stock-TUI 理由）：前者默认
 nil，打开后每个命令都写一次 OSC 2 标题序列，而 herdr 自己管 pane 标题、Ghostty 管窗口标题，那是
@@ -2005,10 +2013,9 @@ Emacs 里粘，用终端自己的 bracketed paste（Cmd+V / 终端粘贴）即�
 这个超时；默认的 2 秒让 `emacsclient -t` 的 attach 多等约 4 秒。0.2 秒既够正常终端回包，也让
 herdr 场景的等待可忽略。herdr 保持官方默认配置，不做任何改动。
 
-~+xterm-report-background~ 是手动/一次性查询入口：主动查询终端背景色（OSC 11），拿到后交给
-~xterm--set-background-mode~，让 ~background-mode~ 终端参数有意义，再调一次 ~+load-theme~。
-非 daemon 的 TUI 启动无法在初始帧建立前打开 ~reportBackground~，所以 ~init-emacs-theme~ 在
-~window-setup-hook~ 上用它补查一次；它同时也保留了手动排查明暗主题的入口。
+已删除（2026-11-27）：~+xterm-report-background~ 手动查询入口（OSC 11 查终端背景色，交给
+~xterm--set-background-mode~ 后再调 ~+load-theme~）。主题固定后它已无消费者，连同
+=reportBackground= 能力一并移除，也去掉了配置里最后一处对 ~xterm--*~ 内部函数的依赖。
 
 + 包名（Emacs 内置）：=term/xterm=
 + Git 仓库：
@@ -2018,27 +2025,12 @@ herdr 场景的等待可忽略。herdr 保持官方默认配置，不做任何�
 ;; [xterm]
 (use-package term/xterm
   :init
-  (setq xterm-extra-capabilities '(modifyOtherKeys reportBackground setSelection)
+  (setq xterm-extra-capabilities '(modifyOtherKeys setSelection)
         ;; herdr 不转发 OSC 10/11 查询的回包（2026-11-25 实测：查询字符被原样
         ;; 打到屏幕上、没有应答）。终端初始化时每个同步查询都会白等满
         ;; `xterm-query-timeout'，默认 2 秒让 `emacsclient -t' 的 attach 多等
         ;; 约 4 秒。0.2 秒足够接住正常终端的回包，也把无回包场景压到可忽略。
-        xterm-query-timeout 0.2)
-
-  (defun +xterm-report-background ()
-    "Query the terminal background color and reload the matching theme."
-    (interactive)
-    (unless (display-graphic-p)
-      (require 'term/xterm)
-      (xterm--query "\e]11;?\e\\"
-                    '(("\e]11;" . xterm--report-background-handler))
-                    t)
-      (let ((bg-color (terminal-parameter nil 'xterm--background-color)))
-        (when bg-color
-          (apply #'xterm--set-background-mode bg-color)))
-      (+load-theme)
-      (message "Reported terminal background as %s"
-               (terminal-parameter nil 'background-mode)))))
+        xterm-query-timeout 0.2))
 #+end_src
 
 *** The =init-emacs-core.el= section for ~which-key~
@@ -2415,7 +2407,8 @@ librime-lua and builds nothing.  `~/.nix-profile' stays as a fallback."
 *** The =init-emacs-ime.el= section for ~liberime~
 
 liberime 是 librime 的 Emacs 绑定，~:pre-build~ 直接 ~make~，编译环境由上一小节摆好。数据目录：
-macOS 上共享目录与用户目录都指向 ~~/Library/Rime/~（只指向，不写内容），Linux 上退回 XDG data。
+共享目录与用户目录都指向 ~~/Library/Rime/~（只指向，不写内容）；2026-11-27 macOS-only 简化后
+不再有 Linux 的 XDG data 回落，~xdg~ 也随之不再 require。
 
 + 包名（GitHub emacs-rime/liberime）：~liberime~
 + Git 仓库：
@@ -2427,10 +2420,7 @@ macOS 上共享目录与用户目录都指向 ~~/Library/Rime/~（只指向，�
                       :pre-build ("make"))
   :require-incrementally (t)
   :init
-  (require 'xdg)
-  (setq liberime-shared-data-dir (if (eq system-type 'darwin)
-                                     (expand-file-name "~/Library/Rime/")
-                                   (expand-file-name "rime/" (xdg-data-home)))
+  (setq liberime-shared-data-dir (expand-file-name "~/Library/Rime/")
         liberime-user-data-dir liberime-shared-data-dir))
 #+end_src
 
@@ -2531,8 +2521,8 @@ Squirrel 输入法本体（PID 966）持有，而 GUI Emacs 即使单实例也�
 
 ** The =init-emacs-theme.el= module
 
-这一节的职责只有一条：把「系统现在是明还是暗」这个信号变成一个动作——~load-theme~。它必须排在
-~init-emacs-platform~（信号的产生者）与 ~init-emacs-ui~（会读主题状态）之前，因为下面那句 ~+load-theme~ 挂在
+这一节的职责只有一条：让 Emacs 恒用亮色主题 ~ashen-day~（GUI 与 TUI 都是，2026-11-27 决定固
+定亮色，不再跟随系统明暗）。它排在 ~init-emacs-ui~（会读主题状态）之前，因为下面那句 ~+load-theme~ 挂在
 ~tty-setup-hook~ 上、并且是立即调用的。
 
 *** The =init-emacs-theme.el= section for ~ashen~
@@ -2545,7 +2535,17 @@ teal-gray 文字配 dusty rose 强调。调色板按语义 key 定义，可以�
 ~custom-theme-load-path~ 与 ~load-path~，而同一文件底部的 ~+load-theme~ 通过 ~tty-setup-hook~ 上
 的 ~:unless-daemonp-call-immediately~ 在加载时就会真的跑一次。第一次 ~load-theme~ 必须已经能找到
 ashen 目录，所以这个声明既不能挪到 ~init-emacs-ui~，也不能挪到文件后面——这是全文少数「位置本身就是正确
-性」的地方。
+性」的地方。紧接着把夜间调色板的三个中性 key 量化到 xterm 调色板的精确点：~current-line~ 用
+~#262626~（235）、~alt-background~ 用 ~#303030~（236）、~selection~ 用 ~#3a3a3a~（237）。原因：
+256 色终端会把 ~#222328~ 近似成蓝色的 17 号、把 ~#2e323a~ 近似成青色的 23 号，块与导航条因此偏色。
+回滚只需删掉那段 ~setq~ 再 tangle，主题原值即恢复。
+
+日间调色板做了同样的量化（2026-11-27）：~ashen-day~ 的暖白近白 key（~#fffaf4~ 等）在 256 色下会
+近似到 ANSI 15/7，而 Ghostty 的 Gruvbox 主题把这两个索引重映射成奶黄/灰褐——这正是 TUI 出现奶黄块的
+根因（见 notes/046）。因此把 day 的五个中性 key 量化到 232-255 灰阶 ramp 的精确点：~background~ 用
+~#eeeeee~（255）、~current-line~ 用 ~#e4e4e4~（254）、~alt-background~ 用 ~#dadada~（253）、
+~selection~ 用 ~#d0d0d0~（252）、~region~ 用 ~#c6c6c6~（251）。灰阶条目在 GUI 与 TUI 渲染一致。
+GUI 的代价是 day 底色由暖白变成中性浅灰；回滚同样是删掉那段 ~setq~ 再 tangle。
 
 + 包名（GitHub LuciusChen/ashen）：~ashen~
 + Git 仓库：
@@ -2561,152 +2561,88 @@ ashen 目录，所以这个声明既不能挪到 ~init-emacs-ui~，也不能挪�
 (use-package ashen
   :straight (:host github :repo "LuciusChen/ashen")
   :demand t)
+
+;; Quantize the three neutral keys onto exact xterm palette entries
+;; (235/236/237).  In a 256-colour terminal #222328 and #2e323a are
+;; approximated to the blue/teal indexes 17/23, which is why blocks and
+;; the tab bar looked wrong; GUI and TUI now render the same values.
+;; REVERT: delete this form and tangle; the theme's own palette returns.
+(setq ashen-night-palette-overrides
+      '((current-line   . "#262626")
+        (alt-background . "#303030")
+        (selection      . "#3a3a3a")))
+
+;; Quantize the day neutral keys onto the 232-255 grayscale ramp.  Warm
+;; near-whites (#fffaf4 etc.) approximate to ANSI 15/7, which Ghostty's
+;; Gruvbox theme remaps to cream/tan -- the TUI showed yellow blocks.
+;; Grayscale entries render identically on GUI and TUI.
+;; REVERT: delete this form and tangle; the theme's own palette returns.
+(setq ashen-day-palette-overrides
+      '((background     . "#eeeeee")   ; 255
+        (current-line   . "#e4e4e4")   ; 254
+        (alt-background . "#dadada")   ; 253
+        (selection      . "#d0d0d0")   ; 252
+        (region         . "#c6c6c6"))) ; 251
 #+end_src
 
-*** The =init-emacs-theme.el= section for ~+light-theme~, ~+dark-theme~ and ~+system-appearance~
+*** The =init-emacs-theme.el= section for ~+theme~
 
-两个 ~defcustom~ 是留给自己的出口：换主题只改这两个默认值，选择逻辑不用动。~+system-appearance~
-记住平台层最后一次报告的值（~light~ 或 ~dark~），它由 ~init-emacs-platform~ 写入、由本模块读；写成
-~defvar~ 是因为它是运行期状态，不是可定制的偏好。三个都是普通变量，没有 ~:set~ 函数，改完立刻生
-效。
-
-注意第三个变量紧贴着上一个（没有空行）：它和两个 ~defcustom~ 是同一组声明，只是性质不同，所以没
-有被空行分开。
+本配置固定亮色（2026-11-27 决定）：~+theme~ 是唯一出口，换主题只改这个默认值（如改回 ~ashen-night~）。
+不再跟随系统外观，~+light-theme~ 与 ~+system-appearance~ 已删除。它是普通 ~defcustom~，没有 ~:set~ 函数，
+改完立刻生效。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-theme.el :mkdirp yes
-(defcustom +light-theme 'ashen-day
-  "Theme used when the system appearance is light."
+(defcustom +theme 'ashen-day
+  "The fixed theme used by both GUI and TUI frames."
   :type 'symbol
   :group 'faces)
-
-(defcustom +dark-theme 'ashen-night
-  "Theme used when the system appearance is dark."
-  :type 'symbol
-  :group 'faces)
-(defvar +system-appearance nil
-  "Last reported system appearance, either `light' or `dark'.")
 #+end_src
 
 *** The =init-emacs-theme.el= section for ~+load-theme~
 
-主题层自己不探测系统外观。写入者是 ~init-emacs-platform~：Linux 上收 D-Bus 的 ~color-scheme~ 变化，
-macOS 上轮询 ~AppleInterfaceStyle~，两边都只调用 ~+system-appearance-changed~，由它记下值并在存
-在图形帧时重选主题（通知可能在终端帧被选中时到达，所以先 ~seq-find~ 一个图形帧再干活）。主题层只
-读这个变量，读不到时回落到 ~ns-system-appearance~，再回落到深色。因此有一条加载顺序约束：本模块
-必须早于 ~init-emacs-platform~，否则平台层第一次调用时主题层还没准备好。
+本配置固定亮色（2026-11-27 决定）：~+load-theme~ 不再探测系统外观、也不再按帧类型分叉，只做一件
+事——加载 ~+theme~（GUI 与 TUI 都是），已加载则跳过。平台层的外观探测（Linux 的 D-Bus
+~color-scheme~、macOS 的 ~AppleInterfaceStyle~ 轮询）随之整体删除，主题层与平台层之间不再有明暗
+信号这条依赖边。
 
-~+load-theme~ 自己按帧类型分叉：图形帧看 ~+system-appearance~，终端帧只看**终端参数**
-~background-mode~，未知时回退深色而不是 ~light~。这一点在 2026-11-25 修过：TTY 上帧参数
-~background-mode~ 可能是 xterm 在背景未知时先填的默认 ~light~（=frame.el:1511-1517=），旧实现把它
-当证据，于是 ~emacs -nw~ 的初始帧在 init 时就选了 day 主题；而 ~tty-setup-hook~ 与
-~after-make-frame-functions~ 都赶不上初始帧（初始帧在 init 文件之前建立）。现在只有终端真报告过
-背景才采用该值，否则回退 ~ashen-night~。主题是会话全局的，所以终端帧在有图形帧时不切换主题——那会
-把 GUI 一起改掉。
+~after-make-frame-functions~ 上的 ~+load-theme-for-frame~ 对**所有**新帧补一次 ~+load-theme~，
+不再只挑图形帧：daemon 的第一个帧（无论 GUI 还是 ~emacsclient -t~）可能晚于 ~tty-setup-hook~ 的
+立即调用，每个新帧都要保证默认主题已在。
+
+终端帧的底色：亮色主题的底色已量化为 ~#eeeeee~（灰阶 255 的精确点，见上文 day 量化；原值
+~#fffaf4~ 在 256 色下实际近似到 ANSI 15），必须由 Emacs 自己画出来——
+终端（Ghostty/herdr）是深色，若把底色交还终端，浅色文字会落在深色底上不可读。所以固定亮色下
+**不做**底色透传：原先的 ~+tty-inherit-terminal-background~（把 TTY 帧 ~background-color~ 清成
+~unspecified~）已删除。代价是 TTY 的浅色块与终端深色内边距之间有一圈色差，可接受；若将来改回
+~ashen-night~ 且终端仍深色，可再恢复透传。
 
 值得说明的是那句 ~mapc #'disable-theme~——ashen 由明暗两个主题组成，直接叠加载时后一个的 face 会
-覆盖前一个，但前一个留下的 face 集合不会消失，最终结果取决于加载顺序而不是当前外观；先全部关掉再
-加载，结果就只由「现在是什么外观」决定。
+覆盖前一个，但前一个留下的 face 集合不会消失；先全部关掉再加载，结果就只由 ~+theme~ 决定。
 
-~after-make-frame-functions~ 上另有一个函数，负责新建图形帧时补一次，因为 daemon 的第一个帧可能
-晚于这一切。终端侧另有两处补丁：~xterm--report-background-handler~ 的 advice 处理异步 OSC 11
-回包（原 handler 只存颜色，不设 ~background-mode~、不重载主题），~window-setup-hook~ 上的
-~+tty-query-background-once~ 则为非 daemon 的 TUI 首帧补查一次背景。
+已删除（2026-11-27）：固定主题后无需探测终端背景。原先第二个 src 块里的
+~+tty-apply-reported-background~（~xterm--report-background-handler~ 的 advice）与
+~window-setup-hook~ 上的 ~+tty-query-background-once~ 都为「按终端明暗选主题」服务，随固定主题
+决定一并删除。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-theme.el :mkdirp yes
-(defun +system-appearance-changed (appearance)
-  "Remember APPEARANCE and update the theme using a graphical frame."
-  (setq +system-appearance appearance)
-  ;; Notifications may arrive while a terminal frame is selected.
-  (when-let* ((frame (seq-find #'display-graphic-p (frame-list))))
-    (with-selected-frame frame
-      (+load-theme))))
-
-(defun +theme-for-appearance (appearance)
-  "Return the theme symbol for APPEARANCE, `light' or `dark'."
-  (if (eq appearance 'dark) +dark-theme +light-theme))
-
-(defun +tty-appearance (&optional frame)
-  "Return the appearance FRAME's terminal reported, or nil.
-Only the terminal parameter counts.  The terminal frame's
-`background-mode' parameter may already be the xterm default `light'
-chosen before the background was known."
-  (terminal-parameter (or frame (selected-frame)) 'background-mode))
-
 (add-hook! tty-setup-hook :unless-daemonp-call-immediately
   (defun +load-theme (&optional theme)
-    "Load THEME, or choose the theme matching the selected frame.
-Themes are global in Emacs, so a terminal frame never switches the
-theme while a graphical frame exists: that would change the GUI too.
-An unreported terminal background falls back to dark, not to the
-xterm default light."
-    (let* ((frame (selected-frame))
-           (graphical (display-graphic-p frame))
-           (gui-present (seq-find #'display-graphic-p (frame-list))))
-      (when (or theme graphical (null gui-present))
-        (when (and (not graphical) (+tty-appearance frame))
-          ;; Make the frame parameter agree before the theme's face
-          ;; specs are realized, then let the theme apply.
-          (frame-set-background-mode frame))
-        (setq theme
-              (or theme
-                  (+theme-for-appearance
-                   (if graphical
-                       (or +system-appearance
-                           (and (boundp 'ns-system-appearance)
-                                ns-system-appearance)
-                           'dark)
-                     (or (+tty-appearance frame) 'dark)))))
-        (unless (member theme custom-enabled-themes)
-          (mapc #'disable-theme custom-enabled-themes)
-          (load-theme theme t))))))
+    "Load THEME, or the fixed default theme.  GUI and TUI both use it."
+    (setq theme (or theme +theme))
+    (unless (member theme custom-enabled-themes)
+      (mapc #'disable-theme custom-enabled-themes)
+      (load-theme theme t))))
 
 (add-hook! after-make-frame-functions
   (defun +load-theme-for-frame (frame)
-    "Choose the theme for a newly created graphical FRAME."
-    (when (display-graphic-p frame)
-      (with-selected-frame frame
-        (+load-theme)))))
-#+end_src
-
-#+begin_src emacs-lisp :tangle core/init-emacs-theme.el :mkdirp yes
-(defun +tty-apply-reported-background (&rest _)
-  "Adopt a late OSC 11 reply for the selected terminal, then repick.
-`xterm--report-background-handler' stores only the colour in
-`xterm--background-color'; the terminal's `background-mode' parameter
-and the theme stay stale, so the TTY keeps the xterm default light."
-  (let* ((frame (selected-frame))
-         (term (frame-terminal frame))
-         (rgb (terminal-parameter term 'xterm--background-color)))
-    (when (and rgb (not (display-graphic-p frame)))
-      (apply #'xterm--set-background-mode rgb)
-      (dolist (f (frame-list))
-        (when (eq (frame-terminal f) term)
-          (frame-set-background-mode f)))
+    "Ensure the fixed default theme on every newly created FRAME."
+    (with-selected-frame frame
       (+load-theme))))
-
-(with-eval-after-load 'term/xterm
-  (unless (advice-member-p #'+tty-apply-reported-background
-                           'xterm--report-background-handler)
-    (advice-add 'xterm--report-background-handler
-                :after #'+tty-apply-reported-background)))
-
-(defun +tty-query-background-once ()
-  "Query the terminal background once for a non-daemon TUI start.
-The initial terminal frame is created before any init file runs, so
-`reportBackground' cannot be enabled in time for it."
-  (when (and (not (daemonp))
-             (not (display-graphic-p))
-             (null (+tty-appearance (selected-frame)))
-             (fboundp '+xterm-report-background))
-    (let ((xterm-query-timeout 0.15))
-      (+xterm-report-background))))
-
-(add-hook 'window-setup-hook #'+tty-query-background-once)
 #+end_src
 
 *** The =init-emacs-theme.el= section to provide the feature
 
-~provide~ 把 ~init-emacs-theme~ 登记成 feature，~init-emacs-platform~ 的那两条调用路径就是在它之后才成立的。
+~provide~ 把 ~init-emacs-theme~ 登记成 feature，这个模块的加载到此结束。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-theme.el :mkdirp yes
 (provide 'init-emacs-theme)
@@ -3079,9 +3015,15 @@ MonoLisaCode，实际字体是 PragmataPro Liga，表没动）。Org 必须排�
 拼写错误都能标出位置。文件头说它用 overlay 与 display spec 实现、不用 child frame，所以终端里也能
 用：graphic 帧走 fringe 位图，非 graphic 帧退回 margin 的字符标记。
 
-本配置全局打开它，并把空闲刷新延迟从 0.03 秒改成 0.1 秒、滚动驱动的更新间隔设成 0.01 秒——两个数字
-都是「等一等、合并一下」的方向，避免滚轮一动就让每个窗口各算一遍。其余选项保持默认（区域是
-~fringe~，启动时打开全部标志组）。
+默认不启用（2026-11-28）：右侧整列 signs 太杂，拇指与标记都关掉，但声明与调参原样保留，
+日后想用时把下面 :hook 那行取消注释再 tangle 即可。刷新延迟/更新间隔保持上游默认（0.03 秒 / 0，
+区域 ~fringe~，启动时打开全部标志组）。曾试过 0.1/0.01 的「等一等、合并一下」节流，但 pty 抓包证明
+慢滚输出逐字节相同、快滚反而多 1.2% 输出、默认路径快约 6%，故删除调参（2026-11-26，见 dev-docs/notes/045）。
+
+唯一例外是 ~scrollview-fallback-to-margin~ 设为 ~nil~（2026-11-27）：上游默认会让非图形帧退回
+window margin 画字符滚动条，但 TTY 无 GUI 双缓冲，margin indicator 每次 scroll/idle 重画都触发整窗
+重绘，是 TUI 持续闪烁的最大头，且 margin 占一列挤占 telega 等双栏布局。设 nil 后 TTY 不画任何
+scrollview indicator（fringe 在终端不可用），GUI 的 fringe 滚动条不受影响。
 
 + 包名（GitHub roife/scrollview.el）：~scrollview~
 + Git 仓库：
@@ -3091,10 +3033,12 @@ MonoLisaCode，实际字体是 PragmataPro Liga，表没动）。Org 必须排�
 ;; [scrollview] Show scroll progress in the fringe
 (use-package scrollview
   :straight (:type git :host github :repo "roife/scrollview.el" :branch "main")
-  :hook ((after-init . global-scrollview-mode))
+  ;; Disabled 2026-11-28: keep the declaration, re-enable by uncommenting.
+  ;; :hook ((after-init . global-scrollview-mode))
   :config
-  (setq scrollview-refresh-delay 0.1
-        scrollview-update-interval 0.01))
+  ;; TTY: no margin scrollbar (margin redraws flicker on terminals and steal a
+  ;; column from two-column UIs like telega).  GUI fringe unaffected.
+  (setq scrollview-fallback-to-margin nil))
 #+end_src
 
 *** The =init-emacs-ui.el= section for ~frame-title-format~
@@ -3118,123 +3062,24 @@ MonoLisaCode，实际字体是 PragmataPro Liga，表没动）。Org 必须排�
 
 ** The =init-emacs-platform.el= module
 
-这个模块只有一个职责：把「系统现在是明还是暗」变成一次 ~+system-appearance-changed~ 调用。探测全在
-这里，主题层只消费结果，所以它是外观信号的唯一生产者；也因此 ~init-emacs-theme~ 必须排在它前面——第一次
-回调时 ~+system-appearance-changed~ 得已经存在。两个平台分支之外没有别的内容，macOS 那一支里的 ~s-~
-快捷键跟着平台走，因为它只对 macOS 有意义。
-
-*** The =init-emacs-platform.el= section for the Linux colour scheme
-
-桌面环境通过 XDG Settings portal 暴露配色偏好：接口 ~org.freedesktop.portal.Settings~ 上有 ~Read~ 方
-法读当前值、有 ~SettingChanged~ 信号报告后续变化，KDE、GNOME 与多数现代桌面都实现它，比逐个桌面写
-分支可靠。~color-scheme~ 的取值是 0 无偏好、1 偏深、2 偏浅。
-
-代码先注册信号，再用一次 ~Read~ 补上当前值——两条路的返回值包装层数不同（~Read~ 两层、
-~SettingChanged~ 一层），所以处理函数里那个 ~while~ 一律往里剥。整段包在 ~condition-case~ 里，并且
-只在 ~require~ 到 ~dbus~ 且 ~dbus-register-signal~ 可用时才注册：headless 会话、没有 session bus 的
-构建仍要能正常启动，失败就安静地保持默认深色（读不到或为 0 时都按 ~dark~ 处理）。注册结果存在
-~+linux-appearance-signal~ 里，帧创建时若已注册就复用，避免每个新帧多挂一个信号；hook 上带
-~:call-immediately~，daemon 启动时先跑一次，不必等第一个 client 帧。
-
-#+begin_src emacs-lisp :tangle core/init-emacs-platform.el :mkdirp yes
-;;; -*- lexical-binding: t -*-
-(when (eq system-type 'gnu/linux)
-  ;; Follow KDE, GNOME, and other desktops exposing the XDG Settings portal.
-  (defvar +linux-appearance-signal nil
-    "D-Bus registration for desktop appearance changes.")
-
-  (defun +linux-appearance-changed (namespace key value)
-    "Handle a Settings portal change to NAMESPACE, KEY, and VALUE."
-    (when (and (equal namespace "org.freedesktop.appearance")
-               (equal key "color-scheme"))
-      ;; Read wraps the value twice; SettingChanged wraps it once.
-      (while (consp value)
-        (setq value (car value)))
-      ;; Keep the existing dark default when the desktop has no preference.
-      (+system-appearance-changed (if (eq value 2) 'light 'dark))))
-
-  (add-hook! 'after-make-frame-functions :call-immediately
-    (defun +linux-setup-appearance (&optional _frame)
-      "Subscribe to desktop appearance changes and read the current setting."
-      (when (and (require 'dbus nil t) (fboundp 'dbus-register-signal))
-        ;; Headless sessions and builds without a session bus still start normally.
-        ;; Retry on frame creation, which also refreshes the daemon's initial theme.
-        (condition-case nil
-            (progn
-              (unless +linux-appearance-signal
-                (setq +linux-appearance-signal
-                      (dbus-register-signal
-                       :session "org.freedesktop.portal.Desktop"
-                       "/org/freedesktop/portal/desktop"
-                       "org.freedesktop.portal.Settings" "SettingChanged"
-                       #'+linux-appearance-changed)))
-              (+linux-appearance-changed
-               "org.freedesktop.appearance" "color-scheme"
-               (dbus-call-method
-                :session "org.freedesktop.portal.Desktop"
-                "/org/freedesktop/portal/desktop"
-                "org.freedesktop.portal.Settings" "Read" :timeout 1000
-                "org.freedesktop.appearance" "color-scheme")))
-          (dbus-error nil))))))
-#+end_src
+平台层现在只管 macOS 快捷键（2026-11-27 起）。外观跟随已随「固定主题」的决定删除：Linux 的 XDG
+Settings portal（~color-scheme~）整节移除，macOS 的 ~AppleInterfaceStyle~ 轮询定时器也移除，主题
+恒为 ~ashen-day~，见 ~init-emacs-theme~。~s-~ 快捷键跟着平台走，因为它只对 macOS 有意义。
 
 *** The =init-emacs-platform.el= section for macOS
 
-macOS 的外观只有一条权威来源：~defaults read -g AppleInterfaceStyle~，输出里有 ~Dark~ 就是深色，否
-则浅色。但 Nix 版 Emacs 在 macOS 上不更新 ~toolkit-theme~，事件那条路走不通，于是用 2 秒一次的定时
-器轮询。轮询不等于反复切主题：~+mac-sync-system-appearance~ 只在读到的值真的变了时才通知；
-~+mac-appearance-timer~ 存着定时器句柄（目前没有别处用它）。
-
-一个细节值得写下来：~call-process~ 在 ~default-directory~ 指向已被删除的目录时会直接报
-~file-missing~，而 ~with-temp-buffer~ 会继承那个绑定，于是这段代码原本每 2 秒往 ~*Messages*~ 里写一
-次错；现在读之前先把 ~default-directory~ 退回到存在的路径。
-
-同一个 ~when~ 里还有快捷键。~mac-command-modifier~ / ~mac-option-modifier~ 那两行是注释掉的，当前的
+macOS 分支只剩快捷键。~mac-command-modifier~ / ~mac-option-modifier~ 那两行是注释掉的，当前的
 选择是保留系统的 Command 语义，再用 ~s-~ 前缀把最常用的 macOS 习惯键接到编辑命令上（~s-a~ 全选、
 ~s-x~ / ~s-c~ / ~s-v~ 剪贴板、~s-z~ / ~s-Z~ 撤销与重做、~s-s~ 保存、~s-f~ 搜索、~s-t~ / ~s-w~ 新建与
-关闭标签、~s-o~ 切窗口），并解绑 ~s-,~——它默认弹出 Emacs 的相关选项，容易与系统偏
-好设置混淆。两件事共用一个 ~(when (eq system-type 'darwin) ...)~，所以合成一节、一块。
+关闭标签；~s-o~ 切窗口在代码里是注释掉的），并解绑 ~s-,~——它默认弹出 Emacs 的相关选项，容易与系统偏
+好设置混淆。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-platform.el :mkdirp yes
+;;; -*- lexical-binding: t -*-
 (when (eq system-type 'darwin)
-  ;; Nix Emacs does not update `toolkit-theme' on macOS.  `+load-theme'
-  ;; follows `+system-appearance', so publish that from AppleInterfaceStyle.
-  (defvar +mac-appearance-timer nil
-    "Timer that rechecks the macOS appearance.")
-
-  (defun +mac-read-system-appearance ()
-    "Return `dark' or `light' from AppleInterfaceStyle."
-    ;; `call-process' inside `with-temp-buffer' signals file-missing
-    ;; ("Setting current directory") when `default-directory' points at
-    ;; a deleted directory, which made the sync timer below error
-    ;; every 2 seconds.  `with-temp-buffer' inherits this binding.
-    (let ((default-directory
-            (if (file-directory-p default-directory)
-                default-directory
-              "/")))
-      (if (with-temp-buffer
-            (when (eq 0 (call-process "defaults" nil t nil
-                                      "read" "-g" "AppleInterfaceStyle"))
-              (goto-char (point-min))
-              (search-forward "Dark" nil t)))
-          'dark
-        'light)))
-
-  (defun +mac-sync-system-appearance ()
-    "Update `+system-appearance' when the macOS appearance changes."
-    (let ((appearance (+mac-read-system-appearance)))
-      (unless (eq appearance +system-appearance)
-        (+system-appearance-changed appearance))))
-
-  (+mac-sync-system-appearance)
-  (setq +mac-appearance-timer
-        (run-with-timer 2 2 #'+mac-sync-system-appearance))
-
-
   ;; [Modifier keys] Command as Meta, Option as Super
   ;; (setq mac-command-modifier 'meta
   ;;       mac-option-modifier 'super)
-
 
   (unbind-key "s-,")
   (bind-keys ("s-a" . mark-whole-buffer)
@@ -3253,7 +3098,7 @@ macOS 的外观只有一条权威来源：~defaults read -g AppleInterfaceStyle~
 
 *** The =init-emacs-platform.el= section to provide the feature
 
-~provide~ 在最后，两个 ~when~ 之后：别的平台上这个模块空加载，但 feature 一样登记，=init.el= 的
+~provide~ 在最后，~when~ 之后：别的平台上这个模块空加载，但 feature 一样登记，=init.el= 的
 ~require~ 不会因为平台不同而失败。
 
 #+begin_src emacs-lisp :tangle core/init-emacs-platform.el :mkdirp yes
@@ -3510,7 +3355,10 @@ switch-to-buffer、aw-select、windmove、pager、tab-bar-select-tab），只脉
 ~+recenter-and-pulse~ 与 ~+recenter-and-pulse-line~ 挂在真正的跳转之后（pop-to-mark-command、
 pop-global-mark、symbol-overlay-basic-jump、compile-goto-error），先 recenter 再脉冲；
 ~+pulse-window-local-a~ 是 ~:around~ advice，把 overlay 绑到当时选中的窗口，避开别的窗口一起闪——
-overlay 默认在所有显示同一 buffer 的窗口里都可见。
+overlay 默认在所有显示同一 buffer 的窗口里都可见。hook 一侧，~xref-after-jump~（覆盖 dumb-jump、
+LSP 等所有 xref 跳转；原先用的 ~dumb-jump-after-jump~ 只被 dumb-jump 旧式命令 run，xref 跳转不触
+发）与 ~imenu-after-jump~ 走 ~+recenter-and-pulse~，bookmark、magit-diff、next-error 走
+~+recenter-and-pulse-line~。
 
 数值上把脉冲从默认的 0.03 秒 × 10 次改成 0.2 秒 × 1 次：一次性、看得清。~M-SPC~ 手动触发；两个
 pulse face 继承 ~region~ 但去掉背景色，免得闪的那一下太抢眼。
@@ -3525,7 +3373,7 @@ pulse face 继承 ~region~ 但去掉背景色，免得闪的那一下太抢眼�
   :custom-face
   (pulse-highlight-start-face ((t (:inherit region :background unspecified))))
   (pulse-highlight-face ((t (:inherit region :background unspecified :extend t))))
-  :hook (((dumb-jump-after-jump imenu-after-jump) . +recenter-and-pulse)
+  :hook (((xref-after-jump imenu-after-jump) . +recenter-and-pulse)
          ((bookmark-after-jump magit-diff-visit-file next-error) . +recenter-and-pulse-line))
   :bind (("M-SPC" . +pulse-line))
   :init
@@ -3610,7 +3458,8 @@ property 记下来，~highlight-changes-visible-mode~ 决定要不要把它们�
 （把这一轮的记录清掉），保存后重新打开。合起来的效果是「每次保存都重新开始记」，屏上永远看不到颜
 色。想看的时候手动 ~M-x highlight-changes-visible-mode~。顺带一提，~scrollview~ 的
 ~highlight-changes~ 标志组要求 mode 与 visible mode 同时开着（源码里
-~scrollview--highlight-changes-active-p~ 两个都检查），所以在当前设置下那组标志不会亮。
+~scrollview--highlight-changes-active-p~ 两个都检查），所以在当前设置下那组标志不会亮；
+且 scrollview 自 2026-11-28 起默认不启用，整列 signs 都不画。
 
 + 包名（Emacs 内置）：~hilit-chg~
 + Git 仓库：
@@ -3644,8 +3493,57 @@ property 记下来，~highlight-changes-visible-mode~ 决定要不要把它们�
 ** The =init-emacs-modeline.el= module
 
 不要在这一节找「模式行框架」：模式行本身用内置的 ~mode-line-format~，排版交给主题。这一节做的是另外
-三件事——修正主题留下的 face 问题、守住 header-line、用 tab-bar 承载全局指示器——最后补一个电池显
-示。规模上的克制是刻意的：配置只负责「哪些信息该出现」。
+四件事——定下模式行放哪些信息、修正主题留下的 face 问题、守住 header-line、用 tab-bar 承载全局指示器。
+规模上的克制是刻意的：配置只负责「哪些信息该出现」。
+
+*** The =init-emacs-modeline.el= section for ~mode-line-format~
+
+模式行的内容只留「会变、且看一眼有用」的项，从左到右：修改标记、buffer 名、行/列、VC 分支、
+主 mode、位置百分比，以及 ~global-mode-string~（现在只剩 org-appt 的定时提醒，有提醒才出现）。
+
+2026-11-28 精简掉的项，各自理由：输入法指示（~mode-line-mule-info~ 的 ~U:~，状态栏里意义有限且常驻）；
+TRAMP 指示（~mode-line-remote~ 的 ~-~，不用远程文件时就是一条横线）；帧标识
+（~mode-line-frame-identification~，单帧下永远为空）；滚动状态（~All~/~Top~/~Bot~，与百分比重复表达
+位置）；项目名（~project-mode-line~，多数时候能从 buffer 名推断）；所有 minor mode 的 lighter
+（~zoom~ 的 ~Z~、~envrc~、~which-key~ 的 ~WK~、~scrollview~ 的 ~sv~、~beginend~ 的 ~be~——全是常开常量的字
+符，占了括号里大半空间）；以及电池显示（整块删除，见下文）。
+
+代价要说清楚：不再使用 ~mode-line-modes~ 意味着也丢掉了 ~mode-line-process~（~eglot~／编译进度一类
+的附加串）与各 minor mode 的 lighter；要看哪些 minor mode 开着，得用 ~C-h m~。若日后需要其中的
+某一项，单独加回对应构造即可。
+
+~mode-line-position~ 的默认值会在行/列前印滚动状态，这里重写成「行/列 + 百分比」两项。
+
+#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el :mkdirp yes
+;; [mode-line] Minimal content
+;; Keep only what changes and is worth a glance: modified flag, buffer name,
+;; line/column, VC branch, major mode, position percentage, plus appt reminders
+;; (via `global-mode-string', which is now appt-only since battery is gone).
+;; Dropped: input-method indicator, TRAMP "-", frame id, scroll status
+;; (All/Top/Bot), project name, every minor-mode lighter, and the battery.
+(setq-default mode-line-format
+              '("%e"
+                mode-line-front-space
+                mode-line-modified
+                " "
+                mode-line-buffer-identification
+                "  "
+                mode-line-position
+                (vc-mode vc-mode)
+                "  "
+                mode-name
+                global-mode-string
+                mode-line-end-spaces))
+
+;; The default `mode-line-position' prints the scroll status before line:column.
+;; Rewrite it as "(line,col)  pct" only.
+(setq-default mode-line-position
+              '((line-number-mode "(%l")
+                (column-number-mode ",%c")
+                (line-number-mode ")")
+                "  "
+                (-3 "%p")))
+#+end_src
 
 *** The =init-emacs-modeline.el= section for two face fixes
 
@@ -3760,13 +3658,15 @@ configuration，所以它是工作区，不是 buffer 列表。~tab-bar-format~ 
 ~org-agenda-list~）、telega（未读数，在线时反白）、emms（播放状态）。如果 ~agent-shell-attention~
 在，还会插一段它自己的格式。三段用同一个模式：先定义 ~+tab-bar-*-indicator-cache~，再挂 advice 在事
 件发生时重算缓存并 ~force-mode-line-update~，而不是让 ~tab-bar-format~ 每次 redisplay 都去问一
-遍——后者会在每个 redisplay 周期里跑 ~telega-chats-list~ 这类重函数。三段都装在
-~with-eval-after-load~ 里，相应包不在就不存在。
+遍——后者会在每个 redisplay 周期里跑 ~telega-chats-list~ 这类重函数。org-agenda 与 telega 两段的
+刷新带 equal 守卫：新值与缓存相同就不 setq、不刷，避免同值事件串反复整行重画 tab-bar；跨帧一致性
+保留（刷新时仍带 ~t~）。三段都装在 ~with-eval-after-load~ 里，相应包不在就不存在。
 
 telega 段另外收窄了成本：原实现每个未读事件都 ~(telega-chats-list)~ 后跑两次
 ~telega-filter-chats~ 汇总 mention/reaction，TUI 下事件成串到达会与重绘竞争；现在只读
 ~unread_unmuted_count~，并在缓存更新后显式 ~force-mode-line-update~（此前漏了，指示器会
-停在旧值）。上游可参考 #161（root buffer 更新拖慢 Emacs）与 #164（updateFile 已按进度节流）。
+停在旧值）；值不变则不刷（equal 守卫），同值事件串不再反复整行重画 tab-bar，跨帧一致性保留
+（仍带 ~t~）。上游可参考 #161（root buffer 更新拖慢 Emacs）与 #164（updateFile 已按进度节流）。
 
 第三层是 daemon 下的 workaround：新建帧与 ~window-setup~ 时手动重建一次 tab-bar 行
 （~tab-bar--update-tab-bar-lines~ 加 ~force-mode-line-update~），否则 client 帧会缺标签。
@@ -3821,13 +3721,14 @@ telega 段另外收窄了成本：原实现每个未读事件都 ~(telega-chats-
                            (truncate-string-to-width notification 24 nil nil "…")))
              (text (propertize (format " %d%s " count
                                        (if preview (concat " " preview) ""))
-                               'face 'font-lock-keyword-face)))
-        (setq +tab-bar-org-agenda-indicator-cache
-              `((tab-bar-org-agenda menu-item ,text
-                                    (lambda ()
-                                      (interactive)
-                                      (org-agenda-list nil nil 'day))))))
-      (force-mode-line-update t))
+                               'face 'font-lock-keyword-face))
+             (new `((tab-bar-org-agenda menu-item ,text
+                                        (lambda ()
+                                          (interactive)
+                                          (org-agenda-list nil nil 'day))))))
+        (unless (equal-including-properties new +tab-bar-org-agenda-indicator-cache)
+          (setq +tab-bar-org-agenda-indicator-cache new)
+          (force-mode-line-update t))))
     (+tab-bar-org-agenda-indicator-update))
 
   (with-eval-after-load 'telega
@@ -3841,14 +3742,20 @@ telega 段另外收窄了成本：原实现每个未读事件都 ~(telega-chats-
         ;; 只读 `unread_unmuted_count'，不再为每个未读事件遍历全部 chat
         ;; 并跑两次 `telega-filter-chats'（上游 telega-core.el 的
         ;; `telega-chats-list' 是 hash-table-values，O(N) 分配）。
-        (setq +tab-bar-telega-indicator-cache
-              (let* ((online-p (funcall telega-online-status-function))
-                     (count (or (plist-get telega--unread-chat-count :unread_unmuted_count) 0))
-                     (text (propertize (concat " T" (unless (zerop count) (number-to-string count)) " ")
-                                       'face `(:inherit font-lock-keyword-face :inverse-video ,online-p))))
-                `((tab-bar-telega menu-item ,text telega
-                                  :help "Open Telega"))))
-        (force-mode-line-update t)))
+        (let ((new (let* ((online-p (funcall telega-online-status-function))
+                          (count (or (plist-get telega--unread-chat-count :unread_unmuted_count) 0))
+                          (text (propertize (concat " T" (unless (zerop count) (number-to-string count)) " ")
+                                            'face `(:inherit font-lock-keyword-face :inverse-video ,online-p))))
+                     `((tab-bar-telega menu-item ,text telega
+                                       :help "Open Telega")))))
+          ;; `equal' ignores text properties, and the online indicator
+          ;; lives only in the face (:inverse-video); compare properties
+          ;; too or online flips get skipped.  Keep the lambda in the
+          ;; cache as a data list: a closure would make `equal' degrade
+          ;; to `eq' and the guard would silently always refresh.
+          (unless (equal-including-properties new +tab-bar-telega-indicator-cache)
+            (setq +tab-bar-telega-indicator-cache new)
+            (force-mode-line-update t)))))
 
     (add-hook! (telega-ready-hook
                 telega-chats-fetched-hook
@@ -3881,27 +3788,14 @@ telega 段另外收窄了成本：原实现每个未读事件都 ~(telega-chats-
       (force-mode-line-update))))
 #+end_src
 
-*** The =init-emacs-modeline.el= section for ~battery~
+*** Removed from =init-emacs-modeline.el=: ~battery~
 
-~battery~ 是内置的电池显示：~display-battery-mode~ 在模式行里插一段由 ~battery-mode-line-format~ 控
-制的字符串，数据来自 ~battery-status-function~，每隔 ~battery-update-interval~ 秒刷新。格式串里 ~%p~
-是电量百分比，~%b~ 是状态码（空表示正常、~-~ 偏低、~!~ 告急、~+~ 在充电），~%%~ 是一个字面的百分
-号。
+2026-11-28 移除。理由：精简模式行时，电池是典型的状态读数——它不提供可操作的信号（不像修改标记、
+VC 分支），却占据尾部的固定宽度，而且大部分时间插着电、数字不变。
 
-本配置在 ~after-init~ 打开它，格式写成 ~" %b%p%% "~：两侧留空格与相邻字段隔开，中间是状态码加电
-量：接电源、电量 81% 时显示成 ~" 81% "~（状态码为空表示电量正常）。
-
-+ 包名（Emacs 内置）：~battery~
-+ Git 仓库：
-  - GitHub：<https://github.com/emacs-mirror/emacs>（源码随 Emacs 自带）
-
-#+begin_src emacs-lisp :tangle core/init-emacs-modeline.el :mkdirp yes
-;; [battery] Show battery status on the mode line
-(use-package battery
-  :hook (after-init . display-battery-mode)
-  :config
-  (setq battery-mode-line-format " %b%p%% "))
-#+end_src
+连带的效果：~global-mode-string~ 里不再有 ~battery-mode-line-string~，只剩 ~appt-mode-string~，
+于是 ~mode-line-format~ 里的 ~global-mode-string~ 槽位被 org-appt 的定时提醒独占，没有提醒时为空。
+想恢复只需把原 ~use-package battery~ 块加回（~:hook (after-init . display-battery-mode)~）。
 
 *** The =init-emacs-modeline.el= section to provide the feature
 
@@ -5457,7 +5351,10 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
 *** The =init-emacs-edit.el= section for ~substitute~
 
 ~substitute~ 提供一个前缀表 ~substitute-prefix-map~，下面放各种「替换目标」命令（当前 buffer、项
-目、文件…），执行完通过 ~substitute-post-replace~ 报告改了多少处。
+目、文件…），执行完通过替换后的 hook 报告改了多少处。注意上游 code/doc 不一致：defcustom 与
+README 写的都是 ~substitute-post-replace-functions~，但代码实际 run 的是未文档化的
+~substitute-post-replace-hook~。本配置的 ~:hook~ 用的正是后者——目前依赖这个 bug 才能生效，改成
+~-functions~ 会立刻失效；上游修复后需要跟进。
 
 这一块的关键是 ~:demand t~ 与那段注释。~substitute-prefix-map~ 是键位表变量，~C-c r~ 必须先被绑
 成**前缀**键，后面的子键才挂得上去（~C-c r r~ 是 quickrun，在 ~init-emacs-prog~；~C-c r c~ 是 citre）。
@@ -5487,6 +5384,11 @@ undo/redo 历史写盘、下次打开时恢复，因而完整的 ~undo-only~ 行
   :straight t
   :demand t
   :bind ("C-c r" . substitute-prefix-map)
+  ;; NOTE: Upstream code/doc mismatch: the defcustom and README document
+  ;; `substitute-post-replace-functions', but substitute.el actually runs the
+  ;; undocumented `substitute-post-replace-hook'.  This :hook deliberately
+  ;; relies on that bug; switching to `-functions' would break reporting
+  ;; today.  Follow up when upstream fixes the inconsistency.
   :hook (substitute-post-replace . substitute-report-operation)
   :config
   (setopt substitute-highlight t)
@@ -5892,9 +5794,9 @@ ibuffer 的分组是静态的话，这一节把它变活：README 把 ~ibuffer-p
 
 ** The =init-emacs-dired.el= module
 
-这个模块是 dired 本体加一组扩展，但它不只服务「手动浏览文件」：~project-dired~、~fd-dired~、~dired-preview~、~dired-git-info~ 都落回同一个 buffer。所以这里定的按键（~TAB~ 展开、~.~ 隐藏、~;~ 过滤、~V~ 预览）和显示习惯会被别的模块继承，改之前先想清楚谁会受影响。
+这个模块是 dired 本体加一组扩展，但它不只服务「手动浏览文件」：~project-dired~、~fd-dired~、~dired-preview~、~dired-git-info~ 都落回同一个 buffer。所以这里定的按键（~TAB~ 展开、~.~ 隐藏、~V~ 预览）和显示习惯会被别的模块继承，改之前先想清楚谁会受影响。
 
-下面 10 个块：1 个 dired 本体、2 个内置扩展（~dired-aux~、~dired-x~）、6 个外部包，最后一块是 ~provide~。其中 ~dired-hacks~ 那一块同时住着它的 4 个子包（~dired-subtree~、~f~、~dired-collapse~、~dired-narrow~），因为它们是嵌套在 ~use-package dired-hacks~ 的 ~:init~ 里的 form。
+下面 12 个块：1 个 dired 本体、4 个内置扩展（~dired-aux~、~dired-x~、~wdired~、~image-dired~）、6 个外部包（~dired-git-info~、~fd-dired~、~dired-subtree~、~ffx~、~diredfl~、~dired-preview~），最后一块是 ~provide~。外部包里 ~dired-subtree~ 单独从 MELPA 装（2026-11-28 起，向 prot 的方案收敛），不再引入 ~dired-hacks~ 整包。
 
 *** The =init-emacs-dired.el= section for ~dired~
 
@@ -5902,7 +5804,7 @@ ibuffer 的分组是静态的话，这一节把它变活：README 把 ~ibuffer-p
 
 六条设置里只有一条是默认值的复述（~dired-recursive-deletes 'top~，默认就是 ~top~：整棵树只在顶层问一次），其余都是改动：~dired-recursive-copies 'always~（默认 ~top~，复制递归不追问）、~dired-dwim-target t~（默认 nil，两个 dired 窗口互为复制/移动目标）、~dired-auto-revert-buffer #'dired-buffer-stale-p~（默认 nil，只在 buffer 真的过期时重读，而不是每次访问都重读）、~dired-hide-details-hide-symlink-targets nil~（默认 t，显示软链指向）、~dired-free-space nil~（默认 ~first~，不在首行显示剩余空间）。另加一个键：~C-c C-p~ 进 ~wdired~，把目录列表当普通文本编辑后再写回文件系统。
 
-macOS 分支只做一件事：有 GNU ~gls~ 就把它设成 ~insert-directory-program~，没有就关掉 ~dired-use-ls-dired~ 以消掉 ~ls does not support --dired~ 的告警。后面那条 ~when~ 决定 ~dired-listing-switches~：只有在非 macOS、或者 macOS 上装了 ~gls~ 时才敢用 ~--group-directories-first~（GNU ls 的选项），并把 ~ls-lisp-use-insert-directory-program~ 打开，让上面那个程序而不是 ls-lisp 来列目录。默认的 ~-al~ 换成 ~-alh --group-directories-first~。
+gls 逻辑只做一件事（2026-11-27 macOS-only 简化，去掉平台判断，macOS 行为不变）：有 GNU ~gls~ 就把它设成 ~insert-directory-program~，没有就关掉 ~dired-use-ls-dired~ 以消掉 ~ls does not support --dired~ 的告警。后面那条 ~when~ 决定 ~dired-listing-switches~：只有装了 ~gls~ 时才敢用 ~--group-directories-first~（GNU ls 的选项），并把 ~ls-lisp-use-insert-directory-program~ 打开，让上面那个程序而不是 ls-lisp 来列目录。默认的 ~-al~ 换成 ~-alh --group-directories-first~。
 
 + 包名（Emacs 内置）：~dired~
 + Git 仓库：
@@ -5914,7 +5816,12 @@ macOS 分支只做一件事：有 GNU ~gls~ 就把它设成 ~insert-directory-pr
 ;; [dired] File manager
 (use-package dired
   :bind (:map dired-mode-map
-              ("C-c C-p" . wdired-change-to-wdired-mode))
+              ("C-c C-p" . wdired-change-to-wdired-mode)
+              ;; Emacs-native commands worth a key (they exist upstream, just unbound):
+              ;; create a file here, open the file at point with the OS, VC next-action.
+              ("C-+" . dired-create-empty-file)
+              ("C-<return>" . dired-do-open)
+              ("C-x v v" . dired-vc-next-action))
   :config
   (setq
    ;; Always delete and copy recursively
@@ -5927,15 +5834,22 @@ macOS 分支只做一件事：有 GNU ~gls~ 就把它设成 ~insert-directory-pr
    ;; symlink
    dired-hide-details-hide-symlink-targets nil
    ;; free disk
-   dired-free-space nil)
+   dired-free-space nil
+   ;; Deleting goes to the system trash instead of `rm' (recoverable on macOS).
+   delete-by-moving-to-trash t
+   ;; Emacs 29+: clickable directory names, and drag files out of Dired.
+   dired-make-directory-clickable t
+   dired-mouse-drag-files t
+   ;; `dired-do-revert-buffer': skip auto-revert for remote (TRAMP) dirs, where a
+   ;; round-trip per revisit is expensive and often times out.
+   dired-do-revert-buffer (lambda (dir) (not (file-remote-p dir))))
 
-  (when (eq system-type 'darwin)
-    (if (executable-find "gls")
-        (setq insert-directory-program "gls") ; Use GNU ls as `gls' from `coreutils' if available.
-      ;; Suppress the warning: `ls does not support --dired'.
-      (setq dired-use-ls-dired nil)))
+  (if (executable-find "gls")
+      (setq insert-directory-program "gls") ; Use GNU ls as `gls' from `coreutils' if available.
+    ;; Suppress the warning: `ls does not support --dired'.
+    (setq dired-use-ls-dired nil))
 
-  (when (or (not (eq system-type 'darwin)) (executable-find "gls"))
+  (when (executable-find "gls")
     (setq ls-lisp-use-insert-directory-program t ; Using `insert-directory-program'
           ;; Show directory first
           dired-listing-switches "-alh --group-directories-first")))
@@ -5981,14 +5895,20 @@ dired 的「另一半命令」都住在这里：复制、改名、压缩、调�
   :config
   ;; Ask whether destination dirs should get created when copying/removing files.
   (setq dired-create-destination-dirs 'ask
-        dired-vc-rename-file t))
+        dired-vc-rename-file t
+        ;; `C-s' in Dired searches filenames, not buffer text (dwim = only here).
+        dired-isearch-filenames 'dwim
+        ;; Emacs 29+: treat a trailing slash in the target as "create the dir".
+        dired-create-destination-dirs-on-trailing-dirsep t))
 #+end_src
 
 *** The =init-emacs-dired.el= section for ~dired-x~
 
-内置的「扩展目录编辑」——它自己的 customization group 描述就是「Extended directory editing (dired-x).」。本配置只用到它的 ~dired-omit-mode~：~.~ 一键隐藏/显示被 ~dired-omit-files~ 命中的行。
+内置的「扩展目录编辑」——它自己的 customization group 描述就是「Extended directory editing (dired-x).」。本配置用到两样：~dired-omit-mode~（~.~ 一键隐藏/显示被 ~dired-omit-files~ 命中的行）与 ~dired-info~（~I~）。
 
-三条设置都是改动：~dired-omit-files "^\\..*\\'"~（默认只藏 ~#autosave#~ 与 ~.~ / ~..~，这里改成藏所有点开头的文件）、~dired-omit-verbose nil~（默认 t，隐藏时不刷 message）、~dired-clean-confirm-killing-deleted-buffers nil~（默认 t，目录被删掉之后杀它的 dired buffer 不再追问）。
+设置里三条是改动：~dired-omit-files "^\\..*\\'"~（默认只藏 ~#autosave#~ 与 ~.~ / ~..~，这里改成藏所有点开头的文件）、~dired-omit-verbose nil~（默认 t，隐藏时不刷 message）、~dired-clean-confirm-killing-deleted-buffers nil~（默认 t，目录被删掉之后杀它的 dired buffer 不再追问）。
+
+另四条与 ~I~ 键来自 prot 的 dired 设置（2026-11-28），都是内置 defcustom：~dired-clean-up-buffers-too t~（删目录时连 buffer 一起清理）、~dired-x-hands-off-my-keys t~（不让 dired-x 重绑按键，键位表保持可读）、~dired-bind-man nil~ 与 ~dired-bind-info nil~（不把 ~M~ / ~I~ 默认抢给 man/info，于是 ~I~ 可以自己绑成 ~dired-info~）。
 
 + 包名（Emacs 内置）：~dired-x~
 + Git 仓库：
@@ -5999,13 +5919,75 @@ dired 的「另一半命令」都住在这里：复制、改名、压缩、调�
 (use-package dired-x
   :after dired
   :bind (:map dired-mode-map
-              ("." . dired-omit-mode))
+              ("." . dired-omit-mode)
+              ("I" . dired-info))
   :config
   (setq dired-omit-verbose nil
         ;; hide dot files
         dired-omit-files "^\\..*\\'"
         ;; Disable the prompt about killing the Dired buffer for a deleted directory.
-        dired-clean-confirm-killing-deleted-buffers nil))
+        dired-clean-confirm-killing-deleted-buffers nil
+        ;; prot's dired settings (all built-in defcustoms):
+        ;; clean up the Dired buffers of a deleted directory too; keep dired-x
+        ;; from rebinding keys behind our back, and free up M and I so that I can
+        ;; be `dired-info' below.
+        dired-clean-up-buffers-too t
+        dired-x-hands-off-my-keys t
+        dired-bind-man nil
+        dired-bind-info nil))
+#+end_src
+
+*** The =init-emacs-dired.el= section for ~wdired~
+
+~wdired~（内置）把 dired 目录列表变成可编辑文本：改文件名、权限，~C-c C-c~ 写回文件系统。
+本模块把 ~C-c C-p~ 绑到 ~wdired-change-to-wdired-mode~（prot 用的是 ~C-x C-q~，这里保留自己的键）。
+
+两条设置（2026-11-28，来自 prot）都是改默认值：~wdired-allow-to-change-permissions t~（默认 nil，
+允许在 wdired 里直接改权限位）、~wdired-create-parent-directories t~（默认 nil，改名时目标父目录不存在就
+建）。两者的共同点是「既然已经在可编辑文本里，就别再因为一个可以自动完成的步骤拦住人」。
+
++ 包名（Emacs 内置）：~wdired~（随 dired 自带）
++ Git 仓库：
+  - GitHub：<https://github.com/emacs-mirror/emacs>（源码随 Emacs 自带）
+
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
+;; [wdired] Editable Dired buffer
+(use-package wdired
+  :after dired
+  :config
+  (setq wdired-allow-to-change-permissions t
+        wdired-create-parent-directories t))
+#+end_src
+
+*** The =init-emacs-dired.el= section for ~image-dired~
+
+~image-dired~（内置）把图片目录变成缩略图网格。本配置只调整观感与「回车交给系统看图」这一步，
+不改变它的工作流。
+
+设置（2026-11-28，来自 prot）里注意一处本地化：~image-dired-external-viewer~ 用 macOS 的
+~open~ 而不是 prot 的 ~xdg-open~；其余（缩略图存法 ~standard~、高 80、边距 2、无浮起
+~relief 0~、每行 4 个）是照抄他的值。~RET~ 绑到 ~image-dired-thumbnail-display-external~，
+即回车用外部查看器打开，而不是在 Emacs 里再看一遍。
+
++ 包名（Emacs 内置）：~image-dired~（随 Emacs 自带）
++ Git 仓库：
+  - GitHub：<https://github.com/emacs-mirror/emacs>（源码随 Emacs 自带）
+
+#+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
+;; [image-dired] Thumbnail grid, externally-opened previews
+(use-package image-dired
+  :after dired
+  :config
+  (with-eval-after-load 'image-dired
+    (define-key image-dired-thumbnail-mode-map (kbd "<return>")
+                #'image-dired-thumbnail-display-external)
+    (setq image-dired-thumbnail-storage 'standard
+          ;; macOS: `open' instead of prot's Linux `xdg-open'.
+          image-dired-external-viewer "open"
+          image-dired-thumb-size 80
+          image-dired-thumb-margin 2
+          image-dired-thumb-relief 0
+          image-dired-thumbs-per-row 4)))
 #+end_src
 
 *** The =init-emacs-dired.el= section for ~fd-dired~
@@ -6025,53 +6007,42 @@ README：「Provide a dired-mode interface for fd's result. Same functionality a
   :bind ([remap find-dired] . fd-dired))
 #+end_src
 
-*** The =init-emacs-dired.el= section for ~dired-hacks~
+*** The =init-emacs-dired.el= section for ~dired-subtree~
 
-README 的定位：「Collection of useful dired additions… splitting all the functionality into separate mutually independent packages」，共用的辅助函数单独抽成 ~dired-hacks-utils~。本配置用的是 roife 的 fork（=fix/collapse-subtree= 分支）而不是上游 Fuco1 的仓库。四个子包是同一条 ~use-package dired-hacks~ 里 ~:init~ 下的嵌套 form，拆到 form 中间会让每块单独不可求值，所以它们共用这一块、这一节。
+~dired-subtree~ 在 dired 里就地展开/收起目录树，不用另开 buffer：~TAB~ 展开、~S-TAB~ 收起。
+装法沿用 prot 的做法——直接从 MELPA 装这一个子包，不装整个 ~dired-hacks~ 集合。
 
-~dired-subtree~：~TAB~ 就地展开/收起子树。两条 custom 都改默认值——~dired-subtree-use-backgrounds nil~（默认 t，关掉逐层背景色：那些深度 face 是硬编码的深绿，跟不了主题）、~dired-subtree-line-prefix "  |  "~（默认两个空格，这里加竖线让层级可见）。留下的是「结构信息保留、硬编码颜色丢掉」。
+两条自定义改默认值：~dired-subtree-use-backgrounds nil~（默认 t，关掉逐层背景色：那些深度 face 是
+硬编码的深绿，跟不了主题；prot 同样这么设）、~dired-subtree-line-prefix "  |  "~（默认两个空格，
+这里加竖线让层级可见）。留下的是「结构信息保留、硬编码颜色丢掉」。
 
-~f~ 是被 ~dired-collapse~ 依赖的（=dired-collapse.el= 直接 ~require~ 它），代码里带一条 ~TODO: remove it~，说明作者认为它迟早能去掉。~dired-collapse~ 把只有单条子链的目录折叠成一行，~dired-collapse-fontify nil~（默认 t）关掉阴影 overlay——同样因为它拖进硬编码颜色，而不是跟随主题。~dired-narrow~ 给 ~;~ 绑 ~dired-narrow-fuzzy~，按输入增量过滤当前列表。
+2026-11-28：此前用 ~dired-hacks~ 整包（roife fork），连带 ~dired-collapse~（单链目录折叠）、
+~dired-narrow~（~;~ 增量过滤）与它们的依赖 ~f~。为向 prot 的 dired 方案收敛、并摆脱对 fork 分支/份额的依赖，
+改为只装 ~dired-subtree~ 一个子包；折叠与增量过滤两项功能一并移除（~;~ 不再是过滤键）。
 
-+ 包名（GitHub）：~dired-hacks~
++ 包名（MELPA）：~dired-subtree~
 + Git 仓库：
-  - GitHub：<https://github.com/roife/dired-hacks>
+  - GitHub：<https://github.com/Fuco1/dired-hacks>（MELPA 的 dired-subtree recipe 取自该仓库）
 
 #+begin_src emacs-lisp :tangle core/init-emacs-dired.el :mkdirp yes
-;; [dired-hacks] Several additional extensions for dired
-(use-package dired-hacks
-  :straight (:host github :repo "roife/dired-hacks" :branch "fix/collapse-subtree")
+;; [dired-subtree] Expand/collapse directory subtrees in place
+(use-package dired-subtree
+  :straight t
   :after dired
-  :init
-  (use-package dired-subtree
-    :bind (:map dired-mode-map
-                ("TAB" . dired-subtree-toggle))
-    ;; No depth backgrounds: the depth faces are hardcoded dark greens
-    ;; (#252e30 ...) that ignore the theme.  The line prefix still nests.
-    :custom
-    (dired-subtree-use-backgrounds nil)
-    :config
-    (setq dired-subtree-line-prefix "  |  "))
-
-  ;; TODO: remove it
-  (use-package f :straight t :demand t)
-
-  (use-package dired-collapse
-    ;; Keep folding, drop the shaded overlay: `dired-collapse-fontify'
-    ;; wraps every filename in `dired-collapse-shadow', which drags in
-    ;; hardcoded colors instead of following the theme.
-    :custom
-    (dired-collapse-fontify nil)
-    :hook (dired-mode . dired-collapse-mode))
-
-  (use-package dired-narrow
-    :bind (:map dired-mode-map
-                (";" . dired-narrow-fuzzy))))
+  :bind (:map dired-mode-map
+              ("TAB" . dired-subtree-toggle)
+              ("S-TAB" . dired-subtree-remove))
+  ;; No depth backgrounds: the depth faces are hardcoded dark greens
+  ;; (#252e30 ...) that ignore the theme.  The line prefix still nests.
+  :custom
+  (dired-subtree-use-backgrounds nil)
+  :config
+  (setq dired-subtree-line-prefix "  |  "))
 #+end_src
 
 *** The =init-emacs-dired.el= section for ~ffx~
 
-README：「~dired-collapse~-style folding for ~find-file~ completion」——目录里只有一条子链时，多给一个直达链尾的候选，带一个只用于显示的 ~↪~ 标记，插入的文件名不变。它是 ~dired-collapse~ 在 minibuffer 一侧的对应物：同一个想法，入口从 dired buffer 换成 ~C-x C-f~。
+README：「~dired-collapse~-style folding for ~find-file~ completion」——目录里只有一条子链时，多给一个直达链尾的候选，带一个只用于显示的 ~↪~ 标记，插入的文件名不变。它借用的是 ~dired-hacks~ 里 ~dired-collapse~ 的想法（本配置已不装那个包），同一个想法，入口从 dired buffer 换成 ~C-x C-f~。
 
 用法只有 ~:hook (after-init . ffx-mode)~。判断链的条件也是 README 写的：忽略 ~.~、~..~ 与 ~dired-omit-files~ 命中的条目之后，每一层都必须恰好一个条目且是目录，一旦出现文件或分支就停——所以它和 ~dired-omit-mode~ 的隐藏规则是共用的。
 
@@ -6553,7 +6524,7 @@ README：「This mode allows to paste whole buffers or parts of buffers to paste
 
 README 的定位：「jump to definition and find references… that favors "just working"」，直接用 ~rg~ / ~ag~ / ~grep~ 现搜，再拿一组启发式挑候选，「absolutely no stored indexes (TAGS) or persistent background processes」。
 
-本配置把它挂到 ~xref-backend-functions~ 上，位置是「没有 LSP 时的兜底」，同时它也是 ~citre~ 后端队列里的最后一环（下一节）。四条设置里一条默认值、三条改动：~dumb-jump-selector 'completing-read~ 是默认值；~dumb-jump-prefer-searcher 'rg~（默认 nil 即自动选，这里写死 rg）、~dumb-jump-aggressive t~（默认 nil，放宽候选）、~dumb-jump-default-project nil~（默认是 ~"~"~。docstring 说它是「找不到项目根时的搜索目录」，而 ~dumb-jump-get-project-root~ 的最后一步是 ~(expand-file-name dumb-jump-default-project)~，所以设成 nil 不是「关掉兜底」：在既没有 ~.dumbjump~ 也没有 ~project-current~ 根的目录里，这个函数直接报 ~wrong-type-argument stringp nil~（batch 实测，把 ~dumb-jump-xref-activate~ 挂进 ~xref-backend-functions~ 后调 ~xref-find-backend~ 同样报错），效果是「不在项目里就报错」而不是「在整个 home 里搜」）。
+本配置把它挂到 ~xref-backend-functions~ 上，位置是「没有 LSP 时的兜底」，同时它也是 ~citre~ 后端队列里的最后一环（下一节）。两条设置都是改动：~dumb-jump-prefer-searcher 'rg~（默认 nil 即自动选，这里写死 rg）、~dumb-jump-default-project nil~（默认是 ~"~"~。docstring 说它是「找不到项目根时的搜索目录」，而 ~dumb-jump-get-project-root~ 的最后一步是 ~(expand-file-name dumb-jump-default-project)~，所以设成 nil 不是「关掉兜底」：在既没有 ~.dumbjump~ 也没有 ~project-current~ 根的目录里，这个函数直接报 ~wrong-type-argument stringp nil~（batch 实测，把 ~dumb-jump-xref-activate~ 挂进 ~xref-backend-functions~ 后调 ~xref-find-backend~ 同样报错），效果是「不在项目里就报错」而不是「在整个 home 里搜」）。原先还设过 ~dumb-jump-selector 'completing-read~ 与 ~dumb-jump-aggressive t~，已移除：这两个变量只影响 dumb-jump 自带的旧式跳转命令，纯 xref 用法下是死配置。
 
 + 包名（MELPA）：~dumb-jump~
 + Git 仓库：
@@ -6567,8 +6538,6 @@ README 的定位：「jump to definition and find references… that favors "jus
   (add-hook! xref-backend-functions #'dumb-jump-xref-activate)
   :config
   (setq dumb-jump-prefer-searcher 'rg
-        dumb-jump-selector 'completing-read
-        dumb-jump-aggressive t
         dumb-jump-default-project nil))
 #+end_src
 
@@ -6704,7 +6673,7 @@ separate argument, although the command accepts only one."
 
 README：「This package provides fast, flexible indentation guide bars in Emacs, with optional tree-sitter enhancement」——用显示属性画缩进竖线，可选按 tree-sitter 的层级着色。本配置挂在 ~prog-mode~ 上开。
 
-这块开头那几行是技术性的一步，不是外观：把 ~indent-bars-display~ 记进 ~text-property-default-nonsticky~，否则终端上的显示属性会漏进新插入的文本（代码注释原话）。其余是外观，且绝大多数是把默认值往「更细更淡」调：~indent-bars-display-on-blank-lines nil~（默认 t，空行不画）、~indent-bars-depth-update-delay 0.15~（默认 0.075）、~indent-bars-width-frac 0.1~（默认 0.25）、~indent-bars-color~ 的 ~:blend~ 从 0.325 降到 0.2、~indent-bars-highlight-current-depth nil~（默认 ~(:pattern ".")~，不再高亮当前层）、~indent-bars-pattern "."~（默认 ~" . . ."~，改成每格一个点）。~indent-bars-zigzag nil~ 是默认值。最后 ~enable-theme-functions~ 上挂 ~indent-bars-reset~，换主题后重画竖线。
+这块开头那几行是技术性的一步，不是外观：把 ~indent-bars-display~ 记进 ~text-property-default-nonsticky~，否则终端上的显示属性会漏进新插入的文本（代码注释原话）。其余是外观，且绝大多数是把默认值往「更细更淡」调：~indent-bars-display-on-blank-lines nil~（默认 t，空行不画）、~indent-bars-depth-update-delay 0.15~（默认 0.075）、~indent-bars-width-frac 0.1~（默认 0.25）、~indent-bars-color~ 的 ~:blend~ 从 0.325 降到 0.2、~indent-bars-highlight-current-depth nil~（默认 ~(:pattern ".")~，不再高亮当前层）、~indent-bars-pattern "."~（默认 ~" . . ."~，改成每格一个点）。~indent-bars-zigzag nil~ 是默认值。换主题后的重画不用手动挂钩：上游已内置 ~indent-bars-reset-styles~ 挂在 ~enable-theme-functions~ 上，原先手动加的 ~indent-bars-reset~ 钩子已删除。
 
 + 包名（GitHub jdtsmith/indent-bars）：~indent-bars~
 + Git 仓库：
@@ -6726,9 +6695,7 @@ README：「This package provides fast, flexible indentation guide bars in Emacs
         indent-bars-color '(highlight :face-bg t :blend 0.2)
         indent-bars-zigzag nil
         indent-bars-highlight-current-depth nil
-        indent-bars-pattern ".")
-
-  (add-hook! enable-theme-functions #'indent-bars-reset))
+        indent-bars-pattern "."))
 #+end_src
 
 *** The =init-emacs-prog.el= section for ~envrc~
@@ -7291,8 +7258,9 @@ README：让 ~visual-line-mode~ 的软换行折在 ~fill-column~（或 ~visual-f
 
 这里只设一个默认值：~visual-fill-column-center-text~ 用 ~setq-default~ 设成 ~t~（默认 nil，是改动；
 它本身是 buffer-local，所以必须 ~setq-default~ 才对所有 buffer 生效）。要注意本配置没有任何地方
-打开 ~visual-fill-column-mode~——真正打开它的是 telega（在自己的 chat buffer 里开），而 ~init-emacs-web~
-又立刻在 telega chat 里把它关掉；所以这条设置的现状是「给别处打开时用的默认值」。
+打开 ~visual-fill-column-mode~，所以这条设置的现状是「给别处打开时用的默认值」。2026-11-27
+~init-emacs-web~ 里在 telega chat 强制关闭它的 ~+telega-disable-visual-fill-column-h~ 已随布局
+覆盖一并移除，telega 的排版交还上游自适应。
 
 + 包名（MELPA）：~visual-fill-column~
 + Git 仓库：
@@ -8422,6 +8390,8 @@ calfw（用 ~get-text-property 'day~ 取日期），内容源两个：Org 与订
   (setq calfw-calendar-buffer-name "*Org Calendar*"
         calfw-display-calendar-holidays t)
   (add-hook! calfw-calendar-mode-hook #'+enable-conservative-scrolling)
+  ;; HACK: hide the sources footer; an upstream rename/refactor makes it silently
+  ;;   reappear, so re-check the calendar visually after upgrading calfw.
   (advice-add 'calfw--render-footer :override (lambda (&rest _) (string))
               '((name . hide-calendar-sources))))
 #+end_src
@@ -9594,7 +9564,11 @@ advice 共用 ~+elfeed--update-after-local-feeds~，只有第三个参数（要�
 
 子进程跑 =scripts/update-elfeed-feeds= 重新生成本地 atom，等它结束后才调原来的更新函数；即使子进程
 失败也照样继续拉远端 feed，只在 ~*elfeed-local-feeds*~ 里留一条 message——本地 atom 坏了不该让 RSS
-整个停摆。token 从 ~auth-source~ 取（~:host "reddit-private-rss"~），取不到就跳过私有 feed。
+整个停摆。凭据从 ~auth-source~ 取（~:host "reddit-private-rss"~），取不到就跳过私有 feed。
+
+用户与 token 必须成对传：Reddit 的私有 RSS URL 是 ~?feed=TOKEN&user=NAME~，而生成器自带的
+默认 username 是硬编码的另一个账号，只传 token 会让两者不匹配、Reddit 返回 404。所以这里用
+~auth-source-search~ 把 authinfo 条目的 ~login~ 也导出成 ~REDDIT_PRIVATE_RSS_USER~（2026-11-28 修）。
 ~:config~ 里剩下的是数据：feed 列表本身（远端 + 本地）、一个过滤串 ~"@6months +unread -ad -pr"~、
 两个挂到 ~elfeed-new-entry-hook~ 上的打标函数，以及一个给已有条目补标的一次性命令
 ~+elfeed-backfill-promo-tags~。db 与 enclosure 目录交给 no-littering，并把这两棵树排除出 recentf。
@@ -9633,15 +9607,24 @@ of spawning a process that can only fail."
         (apply fn args))
        (t
       (let ((process-environment (copy-sequence process-environment))
-            (token (condition-case err
-                       (auth-source-pick-first-password :host "reddit-private-rss"
-                                                        :port "rss")
-                     (error
-                      (message "Elfeed: cannot read Reddit RSS token (%s); skipping private feed"
-                               (error-message-string err))
-                      nil))))
-        (when token
-          (setenv "REDDIT_PRIVATE_RSS_TOKEN" token))
+            (cred (condition-case err
+                      (car (auth-source-search :host "reddit-private-rss"
+                                               :port "rss" :max 1))
+                    (error
+                     (message "Elfeed: cannot read Reddit RSS token (%s); skipping private feed"
+                              (error-message-string err))
+                     nil))))
+        ;; The private RSS URL is `?feed=TOKEN&user=NAME'; the token alone is not
+        ;; enough.  The generator falls back to a hard-coded username, so pass the
+        ;; authinfo `login' too — otherwise the pair mismatches and Reddit 404s.
+        (when cred
+          (let ((token (plist-get cred :secret))
+                (user (plist-get cred :user)))
+            (when (functionp token) (setq token (funcall token)))
+            (when (and (stringp token) (not (string-empty-p token)))
+              (setenv "REDDIT_PRIVATE_RSS_TOKEN" token))
+            (when (and (stringp user) (not (string-empty-p user)))
+              (setenv "REDDIT_PRIVATE_RSS_USER" user))))
         (when (or run-hn +elfeed-hn-llm)
           (setenv "ELFEED_HN_LLM" "1"))
         (make-process :name "elfeed-local-feeds"
@@ -9811,35 +9794,40 @@ of spawning a process that can only fail."
 README：完整功能的非官方 Telegram 客户端，实现了官方客户端的大部分特性，缺的主要是 voice/video
 chat 的完整支持；核心成熟到可以日常聊天。
 
-这一段几乎全是针对上游行为的 hack，值得知道的有五类：图片类选项必须在 ~:init~ 里先设（其它选项在它们
-之前就取了默认值）；bot 命令补全上游返回嵌套列表，所以重定义 ~telega-completions--bot-commands~；
-赞助消息用 ~:override~ 的 advice 直接返回 nil，再在 ~telega-ready-hook~ 里关掉服务端开关；贴纸靠
+这一段几乎全是针对上游行为的 hack，值得知道的有四类：图片类选项必须在 ~:init~ 里先设（其它选项在它们
+之前就取了默认值）；赞助消息用 ~:override~ 的 advice 直接返回 nil，再在 ~telega-ready-hook~ 里关掉服务端开关；贴纸靠
 advice 临时把 ~telega-use-images~ 绑成 ~t~（全局是 ~nil~，否则图片会影响启动）；~telega-alert~ 的
 title/body 里带文本属性，macOS 通知不接受，所以用 ~:filter-args~ 剥掉。
+原先还重定义过 ~telega-completions--bot-commands~（上游 bot 命令补全返回嵌套列表）：上游已修复，
+本地副本与上游逐字节相同，该重定义已删除。
 reaction 的心形不做 FE0F 转换：上游显示路径本就不处理，本地 advice 会绕过 ~telega-tl-str~
 的反代理，把补充平面 emoji 拆成两个代理字符；稳定优先，交回上游路径。
+聊天调色板的暗色背景统一量化到 ~#303030~（调色板 236）：原来的 ~#2e1e2e~ 一类暗浊色在 256 色终端
+会被近似成饱和的蓝/绿/红索引，块底色因此变成中性灰；色相仍保留在 ~:outline~ 与 ~:foreground~。
 ~+telega-completions-setup-capf~ 把每个 CAPF 包在「point 在输入区」的守卫里，否则补全会扫到只读的
 历史消息。哪些上游特性故意没抄也写在注释里：Matrix bridge（数据是私人的）、keyword 过滤、
 nerd-icons 图标。
 
 块首那行 ~;; -*- lexical-binding: t; -*-~ 要留着：它是文件中段的一行文件局部变量声明，Emacs 只认
 文件第一行与第二行的 cookie，所以这一行实际不生效——但它属于代码，删掉就是改代码。
-另外两处按平台分叉：~telega-before-auth-hook~ 里的本地 SOCKS5 代理按 =system-type= 选端口
-（=gnu/linux= 走 clash 的 7891，=darwin= 走 Surge 的 6153 —— macOS 直连 Telegram 会被墙，
-必须走代理），~darwin~ 下开 ~telega-alert-mode~。
+~telega-before-auth-hook~ 里的本地 SOCKS5 代理端口写死 Surge 的 6153（macOS 直连 Telegram
+会被墙，必须走代理；2026-11-27 macOS-only 简化删掉了 clash 7891 的平台分支）；
+~darwin~ 下开 ~telega-alert-mode~ 的分支保留。
 
 TUI 下的图片路径是本段最要紧的一处。~image-mode~ 在 ~display-images-p~ 为 nil 时直接
 ~error "Display does not support images"~；telega 的 ~telega-photo--open~ 最终走
 ~telega-image-view-file~ → ~telega-image-mode~（派生自 ~image-mode~），于是错误被事件分发
 的 ~condition-case-unless-debug~ 吞成 ~Error while processing cmd~。所以这里做两件事：
 给 ~telega-image-view-file~ 加 ~:around~ advice，非图形显示时改走 ~telega-open-file~；
-把 ~telega-open-file-function~ 换成 ~+telega-open-file~，TTY 下用 =open=/=xdg-open= 交给系统
+把 ~telega-open-file-function~ 换成 ~+telega-open-file~，TTY 下用 =open= 交给系统
 查看器（=org-open-file= 对未匹配扩展名会回落 ~find-file~，再进 ~image-mode~）。不改
 ~telega-open-message-as-file~：GUI 下 photo 仍应走 ~telega-image-mode~ 的翻页浏览，advice 已覆盖
 TTY 分支。相关上游：#300（TTY 无图像时的占位符）、#491（emacs-nox 打开 chat 的 image-inserter
-报错）。空行宽度固定为 root 70 / chat 90：关掉上游 ~telega-chat-auto-fill-mode~ 与
-~telega-root-auto-fill-mode~ 的按窗口重算，否则 ~telega-chat-fill-column~ 会被窗口宽度覆盖；
-tab-bar 指示器只读 ~unread_unmuted_count~ 并显式 ~force-mode-line-update~。
+报错）。2026-11-27 移除了布局覆盖：固定 root 70 / chat 90 的 ~setq~、关闭
+~telega-root-auto-fill-mode~ / ~telega-chat-auto-fill-mode~ 的两处，以及在 chat 里关
+~visual-fill-column-mode~ 的 ~+telega-disable-visual-fill-column-h~，恢复上游默认开启的
+root/chat auto-fill（按窗口宽自适应，TTY 同样适用），布局交还上游；此前写死 70/90 与窗宽
+脱节是 TUI 排版问题嫌疑源。tab-bar 指示器只读 ~unread_unmuted_count~ 并显式 ~force-mode-line-update~。
 ~telega-autoplay-mode~ 与 ~telega-notifications-mode~ 是 global minor mode，只 ~setq~ 变量
 不会装 hook，本段不再设置。
 
@@ -9914,10 +9902,8 @@ text properties are invalid."
           (when (telega-file--downloaded-p dfile)
             (let* ((fpath (telega-file--path dfile))
                    (command
-                    (if (eq system-type 'darwin)
-                        (list "osascript" "-e"
-                              (format "set the clipboard to POSIX file %S" fpath))
-                      (list "sh" "-c" (format "wl-copy < %s" (shell-quote-argument fpath))))))
+                    (list "osascript" "-e"
+                          (format "set the clipboard to POSIX file %S" fpath))))
               (make-process
                :name "telega-clipboard"
                :buffer nil
@@ -9980,19 +9966,6 @@ text properties are invalid."
   :hook ((telega-chat-mode . corfu-mode)
          (telega-chat-mode . +telega-completions-setup-capf))
   :config
-  (setq telega-root-fill-column 70
-        telega-chat-fill-column 90)
-
-  ;; 固定 70/90：关掉上游按窗口宽重算 fill-column 的 auto-fill minor mode，
-  ;; 否则 `telega-chat-fill-column' 会被 window-width - margin 覆盖。
-  (telega-root-auto-fill-mode -1)
-  (remove-hook 'telega-chat-mode-hook #'telega-chat-auto-fill-mode)
-
-  (add-hook! telega-chat-mode-hook
-    (defun +telega-disable-visual-fill-column-h ()
-      "Disable visual fill column in Telega chat buffers."
-      (visual-fill-column-mode -1)))
-
   (setq telega-chat-show-avatars nil
         telega-user-show-avatars nil
         telega-root-show-avatars nil
@@ -10066,31 +10039,9 @@ text properties are invalid."
   (add-hook! telega-before-auth-hook
     (defun +telega-enable-local-proxy-h ()
       "Add and enable the local SOCKS5 proxy before Telega authorizes."
-      (let ((port (pcase system-type
-                    ('gnu/linux 7891)   ; clash
-                    ('darwin 6153))))   ; surge socks5
-        (telega--addProxy `(:server "127.0.0.1" :port ,port :type (:@type "proxyTypeSocks5"))
-          :enable-p t
-          :comment "Local SOCKS5 proxy"))))
-
-  ;; HACK: Work around upstream bot command completion returning nested lists.
-  ;; Each mapped candidate list is freshly allocated, so `mapcan' is safe here.
-  (defun telega-completions--bot-commands (chat)
-    "Return bot command completion candidates for CHAT."
-    (let* ((info (telega-chat--info chat))
-           (telega-full-info-offline-p nil)
-           (full-info (telega--full-info info)))
-      (if (telega-chatbuf-match-p '(type bot))
-          (telega-completions--bot-commands-list
-           (telega--tl-get full-info :bot_info :commands))
-        (mapcan (lambda (bot-commands)
-                  (telega-completions--bot-commands-list
-                   (plist-get bot-commands :commands)
-                   (telega-msg-sender-username
-                    (telega-user-get
-                     (plist-get bot-commands :bot_user_id))
-                    'with-@)))
-                (plist-get full-info :bot_commands)))))
+      (telega--addProxy '(:server "127.0.0.1" :port 6153 :type (:@type "proxyTypeSocks5"))
+        :enable-p t
+        :comment "Local SOCKS5 proxy")))
 
   ;; HACK: Show full name only in chatbuf
   (defadvice! +telega-message-header-username-only-a
@@ -10122,7 +10073,8 @@ text properties are invalid."
     (let ((telega-use-images t))
       (apply orig-fn args)))
 
-  ;; HACK: disable sponsored msg
+  ;; HACK: disable sponsored msg; an upstream rename/refactor makes them silently
+  ;;   reappear, so re-check a chat buffer after upgrading telega.
   (defadvice! +telega-hide-sponsored-messages-a (&rest _)
     :override #'telega-chatbuf-footer-ins-sponsored-messages
     nil)
@@ -10168,10 +10120,7 @@ text properties are invalid."
     "Open FILE; on a TTY hand it to the OS viewer."
     (if (display-graphic-p)
         (org-open-file file)
-      (pcase system-type
-        ('darwin (call-process "open" nil 0 nil file))
-        ('gnu/linux (call-process "xdg-open" nil 0 nil file))
-        (_ (find-file file)))))
+      (call-process "open" nil 0 nil file)))
   (keymap-global-set "C-c t" telega-prefix-map)
   ;; `telega-autoplay-mode'/`telega-notifications-mode' 是 global minor
   ;; mode：只 `setq' 变量不会安装 hook（上游 telega-modes.el /
@@ -10193,13 +10142,17 @@ text properties are invalid."
            ((:outline "#56949f") (:foreground "#56949f") (:background "#c6cbd1"))
            ((:outline "#d7827e") (:foreground "#d7827e") (:background "#d1c7cb")))
           (dark
-           ((:outline "#eb6f92") (:foreground "#eb6f92") (:background "#3d2828"))
-           ((:outline "#f6c177") (:foreground "#f6c177") (:background "#2c2620"))
-           ((:outline "#b294bb") (:foreground "#b294bb") (:background "#2e1e2e"))
-           ((:outline "#95b1ac") (:foreground "#95b1ac") (:background "#1e2e1e"))
-           ((:outline "#81a2be") (:foreground "#81a2be") (:background "#234242"))
-           ((:outline "#9ccfd8") (:foreground "#9ccfd8") (:background "#1e262e"))
-           ((:outline "#ebbcba") (:foreground "#ebbcba") (:background "#470528"))))
+           ;; Backgrounds are quantized to #303030 (palette 236): the
+           ;; original dark tints (#2e1e2e etc.) approximate to saturated
+           ;; blue/green/red indexes in 256-colour terminals.  The hue
+           ;; stays on the outline/foreground; the block background is neutral.
+           ((:outline "#eb6f92") (:foreground "#eb6f92") (:background "#303030"))
+           ((:outline "#f6c177") (:foreground "#f6c177") (:background "#303030"))
+           ((:outline "#b294bb") (:foreground "#b294bb") (:background "#303030"))
+           ((:outline "#95b1ac") (:foreground "#95b1ac") (:background "#303030"))
+           ((:outline "#81a2be") (:foreground "#81a2be") (:background "#303030"))
+           ((:outline "#9ccfd8") (:foreground "#9ccfd8") (:background "#303030"))
+           ((:outline "#ebbcba") (:foreground "#ebbcba") (:background "#303030"))))
         telega-box-button-styles
         (let ((styles (copy-tree telega-box-button-styles)))
           (dolist (tag '(owner-sender-tag admin-sender-tag))
@@ -11147,9 +11100,9 @@ OpenAI OAuth（~gptel-openai-oauth~），与本章主用的 Magpie 网关是两�
 
 ** 为什么主题在 ~init-emacs-theme~，而不在 ~init-emacs-ui~？
 
-因为平台层（~init-emacs-platform~）在加载时就会触发外观变化回调，它需要一个已经定义好的
-~+load-theme~；而 ~init-emacs-theme~ 排在平台层之前。把主题相关的东西放进 ui 会让这条依赖边
-反过来。
+历史原因是平台层曾在加载时触发外观变化回调，需要 ~init-emacs-theme~ 先定义好 ~+load-theme~。
+2026-11-27 固定主题后这条回调依赖已删除，但主题独立成模块的理由仍然成立：~init-emacs-ui~ 会读主
+题状态（face、分隔线颜色），主题必须先于 ui 加载；换主题也只动一个文件。
 
 ** 改了配置但没生效怎么办？
 

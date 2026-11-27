@@ -250,6 +250,8 @@ SCHEDULED: %(let ((time (org-read-date t t nil \"First occurrence: \")))
   (setq calfw-calendar-buffer-name "*Org Calendar*"
         calfw-display-calendar-holidays t)
   (add-hook! calfw-calendar-mode-hook #'+enable-conservative-scrolling)
+  ;; HACK: hide the sources footer; an upstream rename/refactor makes it silently
+  ;;   reappear, so re-check the calendar visually after upgrading calfw.
   (advice-add 'calfw--render-footer :override (lambda (&rest _) (string))
               '((name . hide-calendar-sources))))
 

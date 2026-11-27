@@ -140,15 +140,24 @@ of spawning a process that can only fail."
         (apply fn args))
        (t
       (let ((process-environment (copy-sequence process-environment))
-            (token (condition-case err
-                       (auth-source-pick-first-password :host "reddit-private-rss"
-                                                        :port "rss")
-                     (error
-                      (message "Elfeed: cannot read Reddit RSS token (%s); skipping private feed"
-                               (error-message-string err))
-                      nil))))
-        (when token
-          (setenv "REDDIT_PRIVATE_RSS_TOKEN" token))
+            (cred (condition-case err
+                      (car (auth-source-search :host "reddit-private-rss"
+                                               :port "rss" :max 1))
+                    (error
+                     (message "Elfeed: cannot read Reddit RSS token (%s); skipping private feed"
+                              (error-message-string err))
+                     nil))))
+        ;; The private RSS URL is `?feed=TOKEN&user=NAME'; the token alone is not
+        ;; enough.  The generator falls back to a hard-coded username, so pass the
+        ;; authinfo `login' too — otherwise the pair mismatches and Reddit 404s.
+        (when cred
+          (let ((token (plist-get cred :secret))
+                (user (plist-get cred :user)))
+            (when (functionp token) (setq token (funcall token)))
+            (when (and (stringp token) (not (string-empty-p token)))
+              (setenv "REDDIT_PRIVATE_RSS_TOKEN" token))
+            (when (and (stringp user) (not (string-empty-p user)))
+              (setenv "REDDIT_PRIVATE_RSS_USER" user))))
         (when (or run-hn +elfeed-hn-llm)
           (setenv "ELFEED_HN_LLM" "1"))
         (make-process :name "elfeed-local-feeds"
@@ -377,10 +386,8 @@ text properties are invalid."
           (when (telega-file--downloaded-p dfile)
             (let* ((fpath (telega-file--path dfile))
                    (command
-                    (if (eq system-type 'darwin)
-                        (list "osascript" "-e"
-                              (format "set the clipboard to POSIX file %S" fpath))
-                      (list "sh" "-c" (format "wl-copy < %s" (shell-quote-argument fpath))))))
+                    (list "osascript" "-e"
+                          (format "set the clipboard to POSIX file %S" fpath))))
               (make-process
                :name "telega-clipboard"
                :buffer nil
@@ -443,19 +450,6 @@ text properties are invalid."
   :hook ((telega-chat-mode . corfu-mode)
          (telega-chat-mode . +telega-completions-setup-capf))
   :config
-  (setq telega-root-fill-column 70
-        telega-chat-fill-column 90)
-
-  ;; 固定 70/90：关掉上游按窗口宽重算 fill-column 的 auto-fill minor mode，
-  ;; 否则 `telega-chat-fill-column' 会被 window-width - margin 覆盖。
-  (telega-root-auto-fill-mode -1)
-  (remove-hook 'telega-chat-mode-hook #'telega-chat-auto-fill-mode)
-
-  (add-hook! telega-chat-mode-hook
-    (defun +telega-disable-visual-fill-column-h ()
-      "Disable visual fill column in Telega chat buffers."
-      (visual-fill-column-mode -1)))
-
   (setq telega-chat-show-avatars nil
         telega-user-show-avatars nil
         telega-root-show-avatars nil
@@ -529,31 +523,9 @@ text properties are invalid."
   (add-hook! telega-before-auth-hook
     (defun +telega-enable-local-proxy-h ()
       "Add and enable the local SOCKS5 proxy before Telega authorizes."
-      (let ((port (pcase system-type
-                    ('gnu/linux 7891)   ; clash
-                    ('darwin 6153))))   ; surge socks5
-        (telega--addProxy `(:server "127.0.0.1" :port ,port :type (:@type "proxyTypeSocks5"))
-          :enable-p t
-          :comment "Local SOCKS5 proxy"))))
-
-  ;; HACK: Work around upstream bot command completion returning nested lists.
-  ;; Each mapped candidate list is freshly allocated, so `mapcan' is safe here.
-  (defun telega-completions--bot-commands (chat)
-    "Return bot command completion candidates for CHAT."
-    (let* ((info (telega-chat--info chat))
-           (telega-full-info-offline-p nil)
-           (full-info (telega--full-info info)))
-      (if (telega-chatbuf-match-p '(type bot))
-          (telega-completions--bot-commands-list
-           (telega--tl-get full-info :bot_info :commands))
-        (mapcan (lambda (bot-commands)
-                  (telega-completions--bot-commands-list
-                   (plist-get bot-commands :commands)
-                   (telega-msg-sender-username
-                    (telega-user-get
-                     (plist-get bot-commands :bot_user_id))
-                    'with-@)))
-                (plist-get full-info :bot_commands)))))
+      (telega--addProxy '(:server "127.0.0.1" :port 6153 :type (:@type "proxyTypeSocks5"))
+        :enable-p t
+        :comment "Local SOCKS5 proxy")))
 
   ;; HACK: Show full name only in chatbuf
   (defadvice! +telega-message-header-username-only-a
@@ -585,7 +557,8 @@ text properties are invalid."
     (let ((telega-use-images t))
       (apply orig-fn args)))
 
-  ;; HACK: disable sponsored msg
+  ;; HACK: disable sponsored msg; an upstream rename/refactor makes them silently
+  ;;   reappear, so re-check a chat buffer after upgrading telega.
   (defadvice! +telega-hide-sponsored-messages-a (&rest _)
     :override #'telega-chatbuf-footer-ins-sponsored-messages
     nil)
@@ -631,10 +604,7 @@ text properties are invalid."
     "Open FILE; on a TTY hand it to the OS viewer."
     (if (display-graphic-p)
         (org-open-file file)
-      (pcase system-type
-        ('darwin (call-process "open" nil 0 nil file))
-        ('gnu/linux (call-process "xdg-open" nil 0 nil file))
-        (_ (find-file file)))))
+      (call-process "open" nil 0 nil file)))
   (keymap-global-set "C-c t" telega-prefix-map)
   ;; `telega-autoplay-mode'/`telega-notifications-mode' 是 global minor
   ;; mode：只 `setq' 变量不会安装 hook（上游 telega-modes.el /
@@ -656,13 +626,17 @@ text properties are invalid."
            ((:outline "#56949f") (:foreground "#56949f") (:background "#c6cbd1"))
            ((:outline "#d7827e") (:foreground "#d7827e") (:background "#d1c7cb")))
           (dark
-           ((:outline "#eb6f92") (:foreground "#eb6f92") (:background "#3d2828"))
-           ((:outline "#f6c177") (:foreground "#f6c177") (:background "#2c2620"))
-           ((:outline "#b294bb") (:foreground "#b294bb") (:background "#2e1e2e"))
-           ((:outline "#95b1ac") (:foreground "#95b1ac") (:background "#1e2e1e"))
-           ((:outline "#81a2be") (:foreground "#81a2be") (:background "#234242"))
-           ((:outline "#9ccfd8") (:foreground "#9ccfd8") (:background "#1e262e"))
-           ((:outline "#ebbcba") (:foreground "#ebbcba") (:background "#470528"))))
+           ;; Backgrounds are quantized to #303030 (palette 236): the
+           ;; original dark tints (#2e1e2e etc.) approximate to saturated
+           ;; blue/green/red indexes in 256-colour terminals.  The hue
+           ;; stays on the outline/foreground; the block background is neutral.
+           ((:outline "#eb6f92") (:foreground "#eb6f92") (:background "#303030"))
+           ((:outline "#f6c177") (:foreground "#f6c177") (:background "#303030"))
+           ((:outline "#b294bb") (:foreground "#b294bb") (:background "#303030"))
+           ((:outline "#95b1ac") (:foreground "#95b1ac") (:background "#303030"))
+           ((:outline "#81a2be") (:foreground "#81a2be") (:background "#303030"))
+           ((:outline "#9ccfd8") (:foreground "#9ccfd8") (:background "#303030"))
+           ((:outline "#ebbcba") (:foreground "#ebbcba") (:background "#303030"))))
         telega-box-button-styles
         (let ((styles (copy-tree telega-box-button-styles)))
           (dolist (tag '(owner-sender-tag admin-sender-tag))

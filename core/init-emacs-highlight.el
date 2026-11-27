@@ -94,7 +94,7 @@
   :custom-face
   (pulse-highlight-start-face ((t (:inherit region :background unspecified))))
   (pulse-highlight-face ((t (:inherit region :background unspecified :extend t))))
-  :hook (((dumb-jump-after-jump imenu-after-jump) . +recenter-and-pulse)
+  :hook (((xref-after-jump imenu-after-jump) . +recenter-and-pulse)
          ((bookmark-after-jump magit-diff-visit-file next-error) . +recenter-and-pulse-line))
   :bind (("M-SPC" . +pulse-line))
   :init

@@ -9,8 +9,11 @@
 ;; Each entry maps to one `core/init-*.el', tangled from `emacs-config.org'.
 ;; The order IS the dependency order:
 ;;   init-emacs-util  first: every other module uses its `add-hook!' / `defadvice!'
-;;   init-emacs-theme before init-emacs-platform: the platform files call
-;;              `+system-appearance-changed' at load time.
+;;   init-emacs-theme before init-emacs-platform: historical leftover; the
+;;              platform files used to call `+system-appearance-changed' at load
+;;              time.  Since the fixed theme (2026-11-27) they no longer
+;;              trigger theme callbacks, so this edge is no longer a hard
+;;              constraint, but the order is kept.
 ;;   init-emacs-ime   right after core: it owns `default-input-method' and runs
 ;;              `+liberime-setup-build-env' before any liberime build.
 

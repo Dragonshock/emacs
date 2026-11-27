@@ -32,8 +32,6 @@
 (setq auto-mode-case-fold nil)
 
 ;; Avoid processing command-line option tables irrelevant to this frame type.
-(unless (eq system-type 'darwin)
-  (setq command-line-ns-option-alist nil))
 (unless (memq initial-window-system '(x pgtk))
   (setq command-line-x-option-alist nil))
 
@@ -73,11 +71,7 @@
 
 (defun +restore-load-suffixes-h ()
   "Restore dynamic module suffixes before loading the init file."
-  (setq load-suffixes `(".elc" ".el"
-                        ,(cond ((eq system-type 'darwin) ".dylib")
-                               ((eq system-type 'gnu/linux) ".so")
-                               ((eq system-type 'windows-nt) ".dll")
-                               (t nil)))))
+  (setq load-suffixes '(".elc" ".el" ".dylib")))
 
 (add-hook 'before-init-hook #'+restore-load-suffixes-h 100)
 

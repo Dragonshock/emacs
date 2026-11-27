@@ -218,10 +218,7 @@ librime-lua and builds nothing.  `~/.nix-profile' stays as a fallback."
                       :pre-build ("make"))
   :require-incrementally (t)
   :init
-  (require 'xdg)
-  (setq liberime-shared-data-dir (if (eq system-type 'darwin)
-                                     (expand-file-name "~/Library/Rime/")
-                                   (expand-file-name "rime/" (xdg-data-home)))
+  (setq liberime-shared-data-dir (expand-file-name "~/Library/Rime/")
         liberime-user-data-dir liberime-shared-data-dir))
 
 (use-package liberime-regexp

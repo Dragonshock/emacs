@@ -298,8 +298,6 @@ Diagnostics for all files are published separately for project listings."
   (add-hook! xref-backend-functions #'dumb-jump-xref-activate)
   :config
   (setq dumb-jump-prefer-searcher 'rg
-        dumb-jump-selector 'completing-read
-        dumb-jump-aggressive t
         dumb-jump-default-project nil))
 
 ;; [citre] Ctags-infra
@@ -390,9 +388,7 @@ separate argument, although the command accepts only one."
         indent-bars-color '(highlight :face-bg t :blend 0.2)
         indent-bars-zigzag nil
         indent-bars-highlight-current-depth nil
-        indent-bars-pattern ".")
-
-  (add-hook! enable-theme-functions #'indent-bars-reset))
+        indent-bars-pattern "."))
 
 ;; [direnv] Buffer-local project environments
 (use-package envrc

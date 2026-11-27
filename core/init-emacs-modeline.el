@@ -1,3 +1,32 @@
+;; [mode-line] Minimal content
+;; Keep only what changes and is worth a glance: modified flag, buffer name,
+;; line/column, VC branch, major mode, position percentage, plus appt reminders
+;; (via `global-mode-string', which is now appt-only since battery is gone).
+;; Dropped: input-method indicator, TRAMP "-", frame id, scroll status
+;; (All/Top/Bot), project name, every minor-mode lighter, and the battery.
+(setq-default mode-line-format
+              '("%e"
+                mode-line-front-space
+                mode-line-modified
+                " "
+                mode-line-buffer-identification
+                "  "
+                mode-line-position
+                (vc-mode vc-mode)
+                "  "
+                mode-name
+                global-mode-string
+                mode-line-end-spaces))
+
+;; The default `mode-line-position' prints the scroll status before line:column.
+;; Rewrite it as "(line,col)  pct" only.
+(setq-default mode-line-position
+              '((line-number-mode "(%l")
+                (column-number-mode ",%c")
+                (line-number-mode ")")
+                "  "
+                (-3 "%p")))
+
 ;;; -*- lexical-binding: t -*-
 
 ;;; face
@@ -95,13 +124,14 @@ left unchanged."
                            (truncate-string-to-width notification 24 nil nil "…")))
              (text (propertize (format " %d%s " count
                                        (if preview (concat " " preview) ""))
-                               'face 'font-lock-keyword-face)))
-        (setq +tab-bar-org-agenda-indicator-cache
-              `((tab-bar-org-agenda menu-item ,text
-                                    (lambda ()
-                                      (interactive)
-                                      (org-agenda-list nil nil 'day))))))
-      (force-mode-line-update t))
+                               'face 'font-lock-keyword-face))
+             (new `((tab-bar-org-agenda menu-item ,text
+                                        (lambda ()
+                                          (interactive)
+                                          (org-agenda-list nil nil 'day))))))
+        (unless (equal-including-properties new +tab-bar-org-agenda-indicator-cache)
+          (setq +tab-bar-org-agenda-indicator-cache new)
+          (force-mode-line-update t))))
     (+tab-bar-org-agenda-indicator-update))
 
   (with-eval-after-load 'telega
@@ -115,14 +145,20 @@ left unchanged."
         ;; 只读 `unread_unmuted_count'，不再为每个未读事件遍历全部 chat
         ;; 并跑两次 `telega-filter-chats'（上游 telega-core.el 的
         ;; `telega-chats-list' 是 hash-table-values，O(N) 分配）。
-        (setq +tab-bar-telega-indicator-cache
-              (let* ((online-p (funcall telega-online-status-function))
-                     (count (or (plist-get telega--unread-chat-count :unread_unmuted_count) 0))
-                     (text (propertize (concat " T" (unless (zerop count) (number-to-string count)) " ")
-                                       'face `(:inherit font-lock-keyword-face :inverse-video ,online-p))))
-                `((tab-bar-telega menu-item ,text telega
-                                  :help "Open Telega"))))
-        (force-mode-line-update t)))
+        (let ((new (let* ((online-p (funcall telega-online-status-function))
+                          (count (or (plist-get telega--unread-chat-count :unread_unmuted_count) 0))
+                          (text (propertize (concat " T" (unless (zerop count) (number-to-string count)) " ")
+                                            'face `(:inherit font-lock-keyword-face :inverse-video ,online-p))))
+                     `((tab-bar-telega menu-item ,text telega
+                                       :help "Open Telega")))))
+          ;; `equal' ignores text properties, and the online indicator
+          ;; lives only in the face (:inverse-video); compare properties
+          ;; too or online flips get skipped.  Keep the lambda in the
+          ;; cache as a data list: a closure would make `equal' degrade
+          ;; to `eq' and the guard would silently always refresh.
+          (unless (equal-including-properties new +tab-bar-telega-indicator-cache)
+            (setq +tab-bar-telega-indicator-cache new)
+            (force-mode-line-update t)))))
 
     (add-hook! (telega-ready-hook
                 telega-chats-fetched-hook
@@ -153,11 +189,5 @@ left unchanged."
     (defun +refresh-tab-bar (&rest _)
       (tab-bar--update-tab-bar-lines)
       (force-mode-line-update))))
-
-;; [battery] Show battery status on the mode line
-(use-package battery
-  :hook (after-init . display-battery-mode)
-  :config
-  (setq battery-mode-line-format " %b%p%% "))
 
 (provide 'init-emacs-modeline)

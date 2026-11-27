@@ -329,6 +329,11 @@
   :straight t
   :demand t
   :bind ("C-c r" . substitute-prefix-map)
+  ;; NOTE: Upstream code/doc mismatch: the defcustom and README document
+  ;; `substitute-post-replace-functions', but substitute.el actually runs the
+  ;; undocumented `substitute-post-replace-hook'.  This :hook deliberately
+  ;; relies on that bug; switching to `-functions' would break reporting
+  ;; today.  Follow up when upstream fixes the inconsistency.
   :hook (substitute-post-replace . substitute-report-operation)
   :config
   (setopt substitute-highlight t)
