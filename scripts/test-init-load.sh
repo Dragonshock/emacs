@@ -6,7 +6,7 @@
 # because `init-theme' calls +load-theme immediately, while `use-package ashen'
 # was only declared ~200 org lines later inside init-ui (never reached).
 #
-# Run: cd /Users/dragon/.config/emacs && sh scripts/test-init-load.sh
+# Run: cd ~/.config/emacs && sh scripts/test-init-load.sh
 # Exit: 0 = all assertions pass, 1 = at least one failed.
 
 set -u

@@ -1,0 +1,68 @@
+#!/bin/sh
+# Block pushes that would publish personal data.
+#
+# Install (once per clone):
+#     ln -sf ../../scripts/git-hooks/pre-push .git/hooks/pre-push
+#
+# Why: the remote is a PUBLIC repo. Credentials live in gitignored files
+# (private.el, ~/.authinfo), so they should never appear in a commit -- but a
+# stray paste or a path copied out of a test script is easy to miss.
+#
+# Exit non-zero to abort the push.
+
+set -eu
+
+zero=0000000000000000000000000000000000000000
+failed=0
+
+check_range() {
+    range=$1
+    [ -n "$range" ] || return 0
+
+    # Real e-mail addresses, but allow the obvious placeholders.
+    hits=$(git grep -n -I -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' "$range" -- \
+                ':!*.gpg' ':!*.png' ':!*.jpg' 2>/dev/null \
+            | grep -v -E 'you@|@example\.(com|org)|user@|foo@|test@|@localhost|noreply@|git@' \
+            || true)
+    if [ -n "$hits" ]; then
+        printf '%s\n' "pre-push: refusing to publish e-mail addresses:" "$hits" "" >&2
+        failed=1
+    fi
+
+    # Anything that looks like a secret assignment.
+    hits=$(git grep -n -I -E '(api[_-]?key|secret|password|passwd|token)[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9+/_=-]{12,}' "$range" -- \
+                ':!*.gpg' 2>/dev/null \
+            | grep -v -E 'REDDIT_PRIVATE_RSS_TOKEN|DEEPSEEK_API_KEY|ELFEED_HN_LLM|(lambda|magpie|example|placeholder|your-)' \
+            || true)
+    if [ -n "$hits" ]; then
+        printf '%s\n' "pre-push: refusing to publish possible secrets:" "$hits" "" >&2
+        failed=1
+    fi
+
+    # Absolute home paths leak the account name; scripts should use ~.
+    hits=$(git grep -n -I -E '/Users/[A-Za-z0-9._-]+/|/home/[A-Za-z0-9._-]+/' "$range" 2>/dev/null \
+            | grep -v -E '/Users/[A-Za-z0-9._-]+/\.\.\.|example' \
+            || true)
+    if [ -n "$hits" ]; then
+        printf '%s\n' "pre-push: refusing to publish absolute home paths:" "$hits" "" >&2
+        failed=1
+    fi
+}
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    case "$local_sha" in "$zero") continue ;; esac   # deleting a branch
+    if [ "$remote_sha" = "$zero" ]; then
+        range="$local_sha"                            # new branch: scan it all
+    else
+        range="$remote_sha..$local_sha"               # only what's new
+    fi
+    check_range "$range"
+done
+
+if [ "$failed" -ne 0 ]; then
+    printf '%s\n' "pre-push: push aborted. Fix the findings above, or bypass with" \
+                  "          git push --no-verify (only if you are certain)." >&2
+    exit 1
+fi
+
+exit 0

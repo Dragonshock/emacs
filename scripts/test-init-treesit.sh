@@ -6,7 +6,7 @@
 # `major-mode-remap-alist' stayed empty and no mode was remapped to its
 # -ts-mode version (0765-7080 in emacs-config.org).
 #
-# Run: cd /Users/dragon/.config/emacs && sh scripts/test-init-treesit.sh
+# Run: cd ~/.config/emacs && sh scripts/test-init-treesit.sh
 # Exit: 0 = all assertions pass, 1 = at least one failed.
 
 set -u

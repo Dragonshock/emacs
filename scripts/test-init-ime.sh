@@ -7,7 +7,7 @@
 # no registered method behind it, and sis/liberime/liberime-regexp/rimel
 # are absent from the package list.
 #
-# Run: cd /Users/dragon/.config/emacs && sh scripts/test-init-ime.sh
+# Run: cd ~/.config/emacs && sh scripts/test-init-ime.sh
 # Exit: 0 = all assertions pass, 1 = at least one failed.
 
 set -u

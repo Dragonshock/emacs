@@ -29,7 +29,7 @@
 ;;     runtime check degrades to a SKIP backed by the static org check
 ;;     instead of FAILing on an environment quirk.
 ;;
-;; Run: cd /Users/dragon/.config/emacs && \
+;; Run: cd ~/.config/emacs && \
 ;;      emacs -Q --batch -l early-init.el -l init.el \
 ;;        -l scripts/test-init-server.el
 ;; Exit: 0 = all checks pass, 1 = at least one failed.

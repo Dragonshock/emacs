@@ -9,7 +9,7 @@
 # buffer list with no filter groups, so group-at-a-time delete (put point
 # on the [Elfeed] group name, press d, then x) is gone.
 #
-# Run: cd /Users/dragon/.config/emacs && sh scripts/test-init-ibuffer.sh
+# Run: cd ~/.config/emacs && sh scripts/test-init-ibuffer.sh
 # Exit: 0 = all assertions pass, 1 = at least one failed.
 
 set -u
