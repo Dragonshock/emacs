@@ -383,6 +383,17 @@
   ;; External programs can be needed by mode hooks during startup, so import
   ;; the login-shell environment before the rest of the configuration loads.
   (exec-path-from-shell-initialize)
+  ;; AFTER `exec-path-from-shell-initialize', because it replaces PATH wholesale
+  ;; (and with `exec-path-from-shell-arguments' nil the login files never load,
+  ;; so Homebrew is missing).  gpg and pinentry live in Homebrew, and without
+  ;; gpg `epg-configuration' fails with "no usable configuration" — which
+  ;; silently breaks every authinfo.gpg lookup (mu4e's mail credentials).
+  ;; Appended, not prepended: Nix keeps priority, Homebrew is only a fallback.
+  ;; Guarded so non-Homebrew machines are unaffected.
+  (dolist (dir '("/opt/homebrew/bin" "/opt/homebrew/sbin" "/usr/local/bin"))
+    (when (and (file-directory-p dir) (not (member dir exec-path)))
+      (add-to-list 'exec-path dir t)
+      (setenv "PATH" (concat (getenv "PATH") path-separator dir))))
   ;; etaf-md's mermaid renderer runs `command -v mmdc' and walks up from that
   ;; path to node_modules/@mermaid-js/mermaid-cli. The Nix symlink layout in
   ;; ~/.local/share/etaf-md must therefore come first on PATH.
