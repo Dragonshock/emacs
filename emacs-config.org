@@ -9551,6 +9551,16 @@ advice 共用 ~+elfeed--update-after-local-feeds~，只有第三个参数（要�
 失败也照样继续拉远端 feed，只在 ~*elfeed-local-feeds*~ 里留一条 message——本地 atom 坏了不该让 RSS
 整个停摆。它现在只服务 HN：不再需要任何凭据，只决定要不要导出 ~ELFEED_HN_LLM~。
 （Reddit 那条子进程任务已删，原因见下节。）
+
+生成器 =scripts/hn-elfeed.py= 本身**不入库**（见 =.gitignore=），所以下面这三件事是 org 里唯一能
+跨机器保留的描述（2026-11-28）：LLM 调用走本机 Magpie 网关，不是直连 DeepSeek——端点
+~http://127.0.0.1:3425/v1/chat/completions~、模型 ~auto/deepseek-flash~、key 任意（真正的凭据由
+Magpie 管），脚本自身不持任何密钥；启动前用 ~GET /v1/models~ 探活，2 秒内不答则打印提示、
+~exit 0~、**保留旧 atom**（Magpie 没开不该让 elfeed 更新失败）；LLM 请求超时单独的 120 秒
+（默认的 25 秒对推理模型加长文章不够），并带一次重试。从 ~557ed0c= 恢复原版脚本后需按这三条重改。
+
+为什么不再有 ~auth-source~：原实现从 ~machine api.deepseek.com~ 取 key 传给子进程，但那条 key
+已失效（实测 401），而 Magpie 侧统一管理凭据/计费/后端路由，脚本里就不需要再存在凭据逻辑。
 ~:config~ 里剩下的是数据：feed 列表本身（远端 + 本地）、一个过滤串 ~"@6months +unread -ad -pr"~、
 两个挂到 ~elfeed-new-entry-hook~ 上的打标函数，以及一个给已有条目补标的一次性命令
 ~+elfeed-backfill-promo-tags~。db 与 enclosure 目录交给 no-littering，并把这两棵树排除出 recentf。
