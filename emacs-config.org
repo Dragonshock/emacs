@@ -7367,6 +7367,15 @@ ETAF Markdown Preview：把本地 Markdown 文档在普通 buffer 里渲染成�
 上游只发源码，五个仓库全走 straight 的 GitHub recipe：本体 ~etaf-md~ 依赖 ECSS / Ebox /
 ETAF UI / ETAF 四个框架仓库，straight 的 recipe 不声明包间依赖，所以先显式装依赖再装本体。
 
+**已知待办（2026-11-28）**：上游已把这套仓库重组为 ~packages/etaf/*.el~（原来是 ~lisp/*.el~），
+而下面的 recipe 没写 ~:files~。所以**不能直接 pull 升级**：直接拉会让 =straight/build/etaf/=
+变成空目录（实测 20+ 个符号链接断掉）。升级必须同时给 recipe 补 ~:files~ 并验证 mermaid 渲染；
+完整清单见 ~dev-docs/notes/051-etaf-upgrade-todo.md~。
+
+同时注意 ~straight/versions/default.el~ 里这两个包记的是**本地 commit**
+（~etaf~ =9049df4=、~etaf-md~ =5d4f43f=），上游不存在——本机 thaw 有效，**换机器会拉不到**，
+需要按 notes/051 的两种做法之一处理。
+
 + 包名（GitHub emacs-taf）：~etaf-md~ 及其四个框架依赖
 + Git 仓库：
   - GitHub：<https://github.com/emacs-taf/etaf-md>（README 与 docs/ 文档）
