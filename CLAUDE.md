@@ -9,6 +9,16 @@
 
 ## 待办提醒(每次动配置时先看)
 
+- **隐私：这个远端是 public 仓库**(`github.com/Dragonshock/emacs`)。凭据靠 `.gitignore`
+  (`private.el`、`~/.authinfo`) 隔离，但任何提交都全世界可读。
+  推送前检查器在 `scripts/git-hooks/pre-push`（拦截邮箱 / 疑似密钥 / `/Users/<name>` 路径）。
+  **它是本地 hook，不进版本控制**，新 clone 后需重装：
+  ```sh
+  ln -sf ../../scripts/git-hooks/pre-push .git/hooks/pre-push
+  ```
+  已知历史残留：`/Users/dragon` 曾写在 `scripts/test-init-*` 的注释里，已在 2a8e7f2 修复，
+  但更早的 commit(`86a07da` 及之前)仍含它；该信息价值低(仅 macOS 用户名)，未改写历史。
+
 - **ETAF 全家桶升级未完成**(2026-11-28):上游已重组为 `packages/` 结构,但 recipe 没写 `:files`,
   直接升级会让 `straight/build/etaf/` 变空。另外 `straight/versions/default.el` 里
   `etaf`/`etaf-md` 记的是**本地 commit**(上游不存在),换机器 thaw 会失败。
