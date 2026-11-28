@@ -24,3 +24,23 @@
   `etaf`/`etaf-md` 记的是**本地 commit**(上游不存在),换机器 thaw 会失败。
   细节与升级清单:`dev-docs/notes/051-etaf-upgrade-todo.md`。
   **用户要求:涉及包更新/升级/straight 操作的对话里,主动提醒这件事。**
+
+## 本地密钥与凭据(排查备忘)
+
+- **GPG 加密子键会单独过期**(2026-11-28 续期过一次)。症状很有迷惑性:
+  `gpg -e` 报 `Unusable public key` / Emacs 报 `epg-error "no usable configuration"`,
+  但**解密一直正常**—— 因为主密钥只负责签名(`[SC]`),加密靠子键(`[e]`),两者到期日不同。
+  检查:`gpg --list-keys --with-colons <fpr> | awk -F: '$1=="pub"||$1=="sub"'`
+  续期(需**完整 40 位指纹**,给 keyid 会报 "is not a fingerprint"):
+  ```sh
+  gpg --quick-set-expire <primary-fpr> 2y <subkey-fpr>
+  ```
+  当前到期:主键 2028-07-27 / 加密子键 2028-11-27。
+
+- **凭据文件分工**:`~/.authinfo`(明文,权限 600)只放非关键的 apikey;
+  `~/.authinfo.gpg` 放邮件等敏感项(imap/smtp)。`auth-sources` 顺序是明文优先,
+  所以明文里删掉某项后会回退到 gpg 找。需要重新加密 gpg 时,先确认加密子键未过期(见上)。
+
+- **`exec-path` 里的 Homebrew**:见 `init-emacs-core` 的 `exec-path-from-shell` 块。
+  GUI Emacs 拿到的是极简 PATH,而该包跑 shell 时无参数、登录文件不加载,所以 Homebrew 缺失。
+  `gpg`/`pinentry` 只装在 Homebrew,不补 PATH 就会让所有 `.authinfo.gpg` 查询静默失败。
